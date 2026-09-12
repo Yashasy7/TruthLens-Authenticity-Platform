@@ -6,6 +6,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -26,6 +27,7 @@ import java.util.stream.Collectors;
  *   <li>{@link EmailAlreadyExistsException}     → 409 Conflict</li>
  *   <li>{@link InvalidCredentialsException}     → 401 Unauthorized</li>
  *   <li>{@link AccountSuspendedException}       → 403 Forbidden</li>
+ *   <li>{@link AccessDeniedException}           → 403 Forbidden</li>
  *   <li>{@link RoleNotFoundException}           → 500 Internal Server Error</li>
  *   <li>{@link Exception} (catch-all)           → 500 Internal Server Error</li>
  * </ul>
@@ -122,6 +124,24 @@ public class GlobalExceptionHandler {
                         HttpStatus.FORBIDDEN.value(),
                         "ACCOUNT_SUSPENDED",
                         ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles access-denied authorization failures — HTTP 403 Forbidden.
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccessDenied(
+            AccessDeniedException ex, HttpServletRequest request) {
+
+        log.debug("Access denied on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ApiErrorResponse(
+                        HttpStatus.FORBIDDEN.value(),
+                        "FORBIDDEN",
+                        "Access denied. You do not have permission to access this resource.",
                         request.getRequestURI()));
     }
 
