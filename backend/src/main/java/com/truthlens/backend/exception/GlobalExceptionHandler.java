@@ -1,0 +1,171 @@
+package com.truthlens.backend.exception;
+
+import com.truthlens.backend.dto.ApiErrorResponse;
+import jakarta.servlet.http.HttpServletRequest;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+
+import java.util.stream.Collectors;
+
+/**
+ * Centralised REST exception handler for the TruthLens backend.
+ *
+ * <p>Maps domain exceptions and Spring validation errors to structured
+ * {@link ApiErrorResponse} bodies. Stack traces and internal details are
+ * never exposed to clients.</p>
+ *
+ * <p>Handled exceptions and their HTTP status codes:</p>
+ * <ul>
+ *   <li>{@link MethodArgumentNotValidException} → 400 Bad Request</li>
+ *   <li>{@link EmailAlreadyExistsException}     → 409 Conflict</li>
+ *   <li>{@link InvalidCredentialsException}     → 401 Unauthorized</li>
+ *   <li>{@link AccountSuspendedException}       → 403 Forbidden</li>
+ *   <li>{@link RoleNotFoundException}           → 500 Internal Server Error</li>
+ *   <li>{@link Exception} (catch-all)           → 500 Internal Server Error</li>
+ * </ul>
+ */
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
+
+    // -------------------------------------------------------------------------
+    // Bean Validation failures — HTTP 400
+    // -------------------------------------------------------------------------
+
+    /**
+     * Handles Jakarta Bean Validation failures from {@code @Valid} annotated
+     * controller method parameters.
+     *
+     * <p>Field-level error messages are collected and concatenated into a single
+     * client-safe message. No field values are included to avoid echoing
+     * potentially sensitive input back to the caller.</p>
+     */
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ResponseEntity<ApiErrorResponse> handleValidationException(
+            MethodArgumentNotValidException ex, HttpServletRequest request) {
+
+        String message = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .sorted()
+                .collect(Collectors.joining("; "));
+
+        log.debug("Validation failure on {}: {}", request.getRequestURI(), message);
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "VALIDATION_ERROR",
+                        message,
+                        request.getRequestURI()));
+    }
+
+    // -------------------------------------------------------------------------
+    // Domain exceptions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Handles duplicate-email registration attempts — HTTP 409 Conflict.
+     */
+    @ExceptionHandler(EmailAlreadyExistsException.class)
+    public ResponseEntity<ApiErrorResponse> handleEmailAlreadyExists(
+            EmailAlreadyExistsException ex, HttpServletRequest request) {
+
+        log.debug("Registration conflict on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.CONFLICT)
+                .body(new ApiErrorResponse(
+                        HttpStatus.CONFLICT.value(),
+                        "EMAIL_ALREADY_EXISTS",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles invalid credentials during login — HTTP 401 Unauthorized.
+     */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidCredentials(
+            InvalidCredentialsException ex, HttpServletRequest request) {
+
+        log.debug("Authentication failure on {}", request.getRequestURI());
+
+        return ResponseEntity
+                .status(HttpStatus.UNAUTHORIZED)
+                .body(new ApiErrorResponse(
+                        HttpStatus.UNAUTHORIZED.value(),
+                        "INVALID_CREDENTIALS",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles suspended account login attempts — HTTP 403 Forbidden.
+     */
+    @ExceptionHandler(AccountSuspendedException.class)
+    public ResponseEntity<ApiErrorResponse> handleAccountSuspended(
+            AccountSuspendedException ex, HttpServletRequest request) {
+
+        log.debug("Suspended account login attempt on {}", request.getRequestURI());
+
+        return ResponseEntity
+                .status(HttpStatus.FORBIDDEN)
+                .body(new ApiErrorResponse(
+                        HttpStatus.FORBIDDEN.value(),
+                        "ACCOUNT_SUSPENDED",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles missing system role configuration — HTTP 500 Internal Server Error.
+     * This indicates a database seeding problem, not a client error.
+     */
+    @ExceptionHandler(RoleNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleRoleNotFound(
+            RoleNotFoundException ex, HttpServletRequest request) {
+
+        // Log at ERROR level — this is a server-side misconfiguration.
+        log.error("System role configuration error on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "CONFIGURATION_ERROR",
+                        "A server configuration error occurred. Please contact the administrator.",
+                        request.getRequestURI()));
+    }
+
+    // -------------------------------------------------------------------------
+    // Catch-all — HTTP 500
+    // -------------------------------------------------------------------------
+
+    /**
+     * Catch-all handler for unexpected exceptions.
+     * Logs the full exception server-side but returns only a generic message to
+     * the client to prevent information disclosure.
+     */
+    @ExceptionHandler(Exception.class)
+    public ResponseEntity<ApiErrorResponse> handleGenericException(
+            Exception ex, HttpServletRequest request) {
+
+        log.error("Unexpected error on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "INTERNAL_SERVER_ERROR",
+                        "An unexpected error occurred. Please try again later.",
+                        request.getRequestURI()));
+    }
+}
