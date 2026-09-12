@@ -17,6 +17,8 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKey;
 import java.nio.charset.StandardCharsets;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Date;
 import java.util.List;
 import java.util.UUID;
@@ -100,6 +102,7 @@ public class JwtService {
                 .toList();
 
         return Jwts.builder()
+                .id(UUID.randomUUID().toString())
                 .subject(user.getEmail())
                 .claim(CLAIM_USER_ID, user.getId().toString())
                 .claim(CLAIM_ROLES, roles)
@@ -200,5 +203,26 @@ public class JwtService {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
+    }
+
+    /**
+     * Extracts the unique JWT ID (jti) claim from the token.
+     *
+     * @param token the signed JWT
+     * @return the JTI string, or null if absent
+     */
+    public String extractJti(String token) {
+        return extractAllClaims(token).getId();
+    }
+
+    /**
+     * Extracts the token expiration timestamp as an {@link OffsetDateTime}.
+     *
+     * @param token the signed JWT
+     * @return the expiration timestamp in UTC, or null if absent
+     */
+    public OffsetDateTime extractExpiration(String token) {
+        Date exp = extractAllClaims(token).getExpiration();
+        return exp != null ? exp.toInstant().atOffset(ZoneOffset.UTC) : null;
     }
 }

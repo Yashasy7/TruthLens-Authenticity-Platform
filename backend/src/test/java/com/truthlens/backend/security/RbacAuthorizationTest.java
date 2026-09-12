@@ -6,10 +6,12 @@ import com.truthlens.backend.entity.Role;
 import com.truthlens.backend.entity.RoleName;
 import com.truthlens.backend.entity.User;
 import com.truthlens.backend.exception.GlobalExceptionHandler;
+import com.truthlens.backend.repository.RevokedTokenRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.test.context.TestPropertySource;
@@ -47,6 +49,9 @@ class RbacAuthorizationTest {
 
     @Autowired
     private JwtService jwtService;
+
+    @MockBean
+    private RevokedTokenRepository revokedTokenRepository;
 
     private String createTokenWithRole(RoleName roleName) {
         User user = new User(roleName.name().toLowerCase() + "@truthlens.io", "hashedPassword", "Test User");

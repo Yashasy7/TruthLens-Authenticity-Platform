@@ -4,6 +4,7 @@ import com.truthlens.backend.dto.AuthResponse;
 import com.truthlens.backend.dto.LoginRequest;
 import com.truthlens.backend.dto.RegisterRequest;
 import com.truthlens.backend.entity.AccountStatus;
+import com.truthlens.backend.entity.RevokedToken;
 import com.truthlens.backend.entity.Role;
 import com.truthlens.backend.entity.RoleName;
 import com.truthlens.backend.entity.User;
@@ -11,6 +12,8 @@ import com.truthlens.backend.exception.AccountSuspendedException;
 import com.truthlens.backend.exception.EmailAlreadyExistsException;
 import com.truthlens.backend.exception.InvalidCredentialsException;
 import com.truthlens.backend.exception.RoleNotFoundException;
+import com.truthlens.backend.exception.UserNotFoundException;
+import com.truthlens.backend.repository.RevokedTokenRepository;
 import com.truthlens.backend.repository.RoleRepository;
 import com.truthlens.backend.repository.UserRepository;
 import com.truthlens.backend.security.JwtService;
@@ -20,21 +23,23 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Core authentication service for TruthLens — Stage 5.
+ * Core authentication service for TruthLens — Stage 5 & 8.
  *
- * <p>Handles user registration and login. Responsibilities:</p>
+ * <p>Handles user registration, login, and secure logout/token revocation. Responsibilities:</p>
  * <ul>
- *   <li>Email normalisation (trim + lowercase) applied consistently to both
- *       registration and login.</li>
+ *   <li>Email normalisation (trim + lowercase) applied consistently to registration and login.</li>
  *   <li>BCrypt password hashing on registration via {@link PasswordEncoder}.</li>
  *   <li>Duplicate email detection before persistence.</li>
  *   <li>USER role assignment from database seed data on registration.</li>
  *   <li>Credential verification and account status check on login.</li>
  *   <li>Signed JWT token generation upon successful login via {@link JwtService}.</li>
+ *   <li>JWT revocation persistence on logout via {@link RevokedTokenRepository}.</li>
  * </ul>
  */
 @Service
@@ -42,10 +47,11 @@ public class AuthService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthService.class);
 
-    private final UserRepository    userRepository;
-    private final RoleRepository    roleRepository;
-    private final PasswordEncoder   passwordEncoder;
-    private final JwtService        jwtService;
+    private final UserRepository         userRepository;
+    private final RoleRepository         roleRepository;
+    private final RevokedTokenRepository revokedTokenRepository;
+    private final PasswordEncoder        passwordEncoder;
+    private final JwtService             jwtService;
 
     // -------------------------------------------------------------------------
     // Constructor injection — no field injection
@@ -53,12 +59,14 @@ public class AuthService {
 
     public AuthService(UserRepository userRepository,
                        RoleRepository roleRepository,
+                       RevokedTokenRepository revokedTokenRepository,
                        PasswordEncoder passwordEncoder,
                        JwtService jwtService) {
-        this.userRepository  = userRepository;
-        this.roleRepository  = roleRepository;
-        this.passwordEncoder = passwordEncoder;
-        this.jwtService      = jwtService;
+        this.userRepository         = userRepository;
+        this.roleRepository         = roleRepository;
+        this.revokedTokenRepository = revokedTokenRepository;
+        this.passwordEncoder        = passwordEncoder;
+        this.jwtService             = jwtService;
     }
 
     // -------------------------------------------------------------------------
@@ -173,6 +181,60 @@ public class AuthService {
 
         // Step 6 — Return safe response containing JWT
         return buildAuthResponse("Login successful", user, token, "Bearer");
+    }
+
+    // -------------------------------------------------------------------------
+    // Logout / Token Revocation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Revokes the authenticated user's current JWT access token.
+     *
+     * <p>Revocation flow:</p>
+     * <ol>
+     *   <li>Extract JTI and expiration timestamp from the token.</li>
+     *   <li>Find authenticated user by normalized email (throw {@link UserNotFoundException} if missing).</li>
+     *   <li>Check idempotency: if JTI is already recorded as revoked, return safely.</li>
+     *   <li>Create and persist a {@link RevokedToken} entity with reason {@code "LOGOUT"}.</li>
+     * </ol>
+     *
+     * @param token the raw JWT string extracted from the Bearer header
+     * @param email the authenticated user's email
+     * @throws UserNotFoundException if the user does not exist in the database
+     */
+    @Transactional
+    public void logout(String token, String email) {
+        String jti = jwtService.extractJti(token);
+        if (jti == null || jti.isBlank()) {
+            log.warn("Attempted logout with token lacking JTI");
+            throw new InvalidCredentialsException("Invalid token: missing token identifier");
+        }
+
+        String normalisedEmail = normaliseEmail(email);
+        User user = userRepository.findByEmail(normalisedEmail)
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + normalisedEmail));
+
+        if (revokedTokenRepository.existsByTokenIdentifier(jti)) {
+            log.debug("JWT is already revoked; skipping duplicate persistence");
+            return;
+        }
+
+        OffsetDateTime expiresAt = jwtService.extractExpiration(token);
+        if (expiresAt == null) {
+            log.warn("Attempted logout with token lacking expiration");
+            throw new InvalidCredentialsException("Invalid token: missing expiration");
+        }
+
+        RevokedToken revokedToken = new RevokedToken(
+                jti,
+                user,
+                expiresAt,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "LOGOUT"
+        );
+
+        revokedTokenRepository.save(revokedToken);
+        log.info("Successfully revoked JWT token for user: id={}", user.getId());
     }
 
     // -------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 package com.truthlens.backend.security;
 
+import com.truthlens.backend.repository.RevokedTokenRepository;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
@@ -29,6 +30,9 @@ class JwtAuthenticationFilterTest {
     @Mock
     private JwtService jwtService;
 
+    @Mock
+    private RevokedTokenRepository revokedTokenRepository;
+
     private JwtAuthenticationFilter filter;
     private MockHttpServletRequest request;
     private MockHttpServletResponse response;
@@ -36,7 +40,7 @@ class JwtAuthenticationFilterTest {
 
     @BeforeEach
     void setUp() {
-        filter = new JwtAuthenticationFilter(jwtService);
+        filter = new JwtAuthenticationFilter(jwtService, revokedTokenRepository);
         request = new MockHttpServletRequest();
         response = new MockHttpServletResponse();
         filterChain = new MockFilterChain();
@@ -49,12 +53,14 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    @DisplayName("valid Bearer token sets SecurityContext with subject and authorities")
+    @DisplayName("valid Bearer token with active JTI sets SecurityContext with subject and authorities")
     void validBearerToken_setsSecurityContext() throws Exception {
         String token = "valid.jwt.token";
         request.addHeader("Authorization", "Bearer " + token);
 
         when(jwtService.validateToken(token)).thenReturn(true);
+        when(jwtService.extractJti(token)).thenReturn("jti-1234");
+        when(revokedTokenRepository.existsByTokenIdentifier("jti-1234")).thenReturn(false);
         when(jwtService.extractEmail(token)).thenReturn("user@truthlens.io");
         when(jwtService.extractRoles(token)).thenReturn(List.of("ROLE_USER", "ROLE_ANALYST"));
 
@@ -66,6 +72,35 @@ class JwtAuthenticationFilterTest {
         assertThat(auth.getAuthorities())
                 .extracting("authority")
                 .containsExactlyInAnyOrder("ROLE_USER", "ROLE_ANALYST");
+    }
+
+    @Test
+    @DisplayName("valid Bearer token with revoked JTI does not authenticate and leaves SecurityContext null")
+    void validBearerToken_revokedJti_doesNotAuthenticate() throws Exception {
+        String token = "revoked.jwt.token";
+        request.addHeader("Authorization", "Bearer " + token);
+
+        when(jwtService.validateToken(token)).thenReturn(true);
+        when(jwtService.extractJti(token)).thenReturn("revoked-jti-5678");
+        when(revokedTokenRepository.existsByTokenIdentifier("revoked-jti-5678")).thenReturn(true);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+    }
+
+    @Test
+    @DisplayName("valid Bearer token lacking a JTI does not authenticate and leaves SecurityContext null")
+    void validBearerToken_missingJti_doesNotAuthenticate() throws Exception {
+        String token = "no-jti.jwt.token";
+        request.addHeader("Authorization", "Bearer " + token);
+
+        when(jwtService.validateToken(token)).thenReturn(true);
+        when(jwtService.extractJti(token)).thenReturn(null);
+
+        filter.doFilter(request, response, filterChain);
+
+        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
     }
 
     @Test

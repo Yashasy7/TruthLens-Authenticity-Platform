@@ -1,5 +1,6 @@
 package com.truthlens.backend.security;
 
+import com.truthlens.backend.repository.RevokedTokenRepository;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -18,17 +19,18 @@ import java.io.IOException;
 import java.util.List;
 
 /**
- * HTTP filter that intercepts requests to extract and validate Bearer JWT tokens.
+ * HTTP filter that intercepts requests to extract, validate, and check revocation of Bearer JWT tokens.
  *
  * <p>Extends {@link OncePerRequestFilter} to guarantee a single execution per request.
- * If a valid JWT is extracted from the {@code Authorization: Bearer <token>} header,
+ * If a valid and unrevoked JWT is extracted from the {@code Authorization: Bearer <token>} header,
  * the user's identity and authorities are stored in the Spring Security
  * {@link SecurityContextHolder}.</p>
  *
  * <p><strong>Security Requirements:</strong></p>
  * <ul>
  *   <li>Only headers starting with {@code Bearer } (case-sensitive) are processed.</li>
- *   <li>Never authenticates malformed, expired, or signature-invalid tokens.</li>
+ *   <li>Never authenticates malformed, expired, revoked, or signature-invalid tokens.</li>
+ *   <li>Tokens without a valid JTI claim are rejected.</li>
  *   <li>Never overwrites an authentication that is already established.</li>
  *   <li>Never logs token values, claims, or credentials.</li>
  *   <li>Always passes control to the next filter in the chain.</li>
@@ -42,10 +44,12 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     private static final String AUTHORIZATION_HEADER = "Authorization";
     private static final String BEARER_PREFIX        = "Bearer ";
 
-    private final JwtService jwtService;
+    private final JwtService             jwtService;
+    private final RevokedTokenRepository revokedTokenRepository;
 
-    public JwtAuthenticationFilter(JwtService jwtService) {
-        this.jwtService = jwtService;
+    public JwtAuthenticationFilter(JwtService jwtService, RevokedTokenRepository revokedTokenRepository) {
+        this.jwtService             = jwtService;
+        this.revokedTokenRepository = revokedTokenRepository;
     }
 
     @Override
@@ -61,19 +65,25 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
             if (!jwt.isEmpty() && SecurityContextHolder.getContext().getAuthentication() == null) {
                 if (jwtService.validateToken(jwt)) {
-                    String email = jwtService.extractEmail(jwt);
-                    List<String> roleNames = jwtService.extractRoles(jwt);
+                    String jti = jwtService.extractJti(jwt);
 
-                    List<SimpleGrantedAuthority> authorities = roleNames.stream()
-                            .map(SimpleGrantedAuthority::new)
-                            .toList();
+                    if (jti == null || jti.isBlank() || revokedTokenRepository.existsByTokenIdentifier(jti)) {
+                        log.debug("JWT token is revoked or lacks a valid JTI");
+                    } else {
+                        String email = jwtService.extractEmail(jwt);
+                        List<String> roleNames = jwtService.extractRoles(jwt);
 
-                    UsernamePasswordAuthenticationToken authToken =
-                            new UsernamePasswordAuthenticationToken(email, null, authorities);
-                    authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+                        List<SimpleGrantedAuthority> authorities = roleNames.stream()
+                                .map(SimpleGrantedAuthority::new)
+                                .toList();
 
-                    SecurityContextHolder.getContext().setAuthentication(authToken);
-                    log.debug("Successfully authenticated request for subject via JWT");
+                        UsernamePasswordAuthenticationToken authToken =
+                                new UsernamePasswordAuthenticationToken(email, null, authorities);
+                        authToken.setDetails(new WebAuthenticationDetailsSource().buildDetails(request));
+
+                        SecurityContextHolder.getContext().setAuthentication(authToken);
+                        log.debug("Successfully authenticated request for subject via JWT");
+                    }
                 } else {
                     log.debug("JWT validation failed for incoming request");
                 }

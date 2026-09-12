@@ -9,6 +9,7 @@ import com.truthlens.backend.entity.RoleName;
 import com.truthlens.backend.entity.User;
 import com.truthlens.backend.exception.GlobalExceptionHandler;
 import com.truthlens.backend.exception.UserNotFoundException;
+import com.truthlens.backend.repository.RevokedTokenRepository;
 import com.truthlens.backend.security.JwtAuthenticationFilter;
 import com.truthlens.backend.security.JwtService;
 import com.truthlens.backend.service.UserService;
@@ -55,6 +56,9 @@ class UserControllerTest {
 
     @MockBean
     private UserService userService;
+
+    @MockBean
+    private RevokedTokenRepository revokedTokenRepository;
 
     private String generateToken(String email, RoleName roleName) {
         User user = new User(email, "hashedPassword", "Test User");

@@ -14,13 +14,14 @@ import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 /**
- * Spring Security configuration for Stage 5 & 6 — JWT Authentication & RBAC.
+ * Spring Security configuration for Stage 5, 6 & 8 — JWT Authentication, RBAC & Logout.
  *
  * <p>Secures the application with stateless JWT authentication and method-level RBAC:</p>
  * <ul>
- *   <li>{@code /api/auth/**} endpoints are publicly accessible (registration and login).</li>
+ *   <li>{@code /api/auth/register} and {@code /api/auth/login} are publicly accessible.</li>
+ *   <li>{@code /api/auth/logout} and all other API endpoints require authentication.</li>
  *   <li>{@link JwtAuthenticationFilter} intercepts all incoming requests to validate
- *       Bearer tokens and establish authentication in the {@code SecurityContext}.</li>
+ *       Bearer tokens, check revocation status, and establish authentication in the {@code SecurityContext}.</li>
  *   <li>Method-level security is enabled with {@link EnableMethodSecurity} for role checks
  *       via {@code @PreAuthorize}.</li>
  *   <li>Unauthenticated requests to protected endpoints receive HTTP 401 Unauthorized.</li>
@@ -55,9 +56,9 @@ public class SecurityConfig {
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))
             )
             .authorizeHttpRequests(auth -> auth
-                // Public authentication endpoints — no token required.
-                .requestMatchers("/api/auth/**").permitAll()
-                // All other requests require authentication.
+                // Public authentication endpoints — registration and login only.
+                .requestMatchers("/api/auth/register", "/api/auth/login").permitAll()
+                // All other requests (including /api/auth/logout) require authentication.
                 .anyRequest().authenticated()
             )
             .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);

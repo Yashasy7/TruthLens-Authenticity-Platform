@@ -23,6 +23,13 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
+import com.truthlens.backend.entity.RevokedToken;
+import com.truthlens.backend.exception.UserNotFoundException;
+import com.truthlens.backend.repository.RevokedTokenRepository;
+import org.mockito.ArgumentCaptor;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -52,6 +59,9 @@ class AuthServiceTest {
     private RoleRepository roleRepository;
 
     @Mock
+    private RevokedTokenRepository revokedTokenRepository;
+
+    @Mock
     private JwtService jwtService;
 
     // Use a real BCrypt encoder at cost 4 — fast in tests, real behaviour.
@@ -61,7 +71,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, roleRepository, passwordEncoder, jwtService);
+        authService = new AuthService(userRepository, roleRepository, revokedTokenRepository, passwordEncoder, jwtService);
     }
 
     // =========================================================================
@@ -291,5 +301,107 @@ class AuthServiceTest {
         assertThat(response.getToken()).isEqualTo("mocked.jwt.token");
         assertThat(response.getTokenType()).isEqualTo("Bearer");
         verify(jwtService).generateToken(user);
+    }
+
+    // =========================================================================
+    // Logout / Revocation tests
+    // =========================================================================
+
+    @Test
+    @DisplayName("logout — successfully revokes token and persists RevokedToken record")
+    void logout_success_persistsRevokedToken() {
+        String token = "valid.jwt.token";
+        String email = "alice@example.com";
+        String jti = "jti-uuid-1234";
+        OffsetDateTime exp = OffsetDateTime.now(ZoneOffset.UTC).plusHours(1);
+
+        User user = new User(email, "hashedPassword", "Alice");
+
+        when(jwtService.extractJti(token)).thenReturn(jti);
+        when(jwtService.extractExpiration(token)).thenReturn(exp);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(revokedTokenRepository.existsByTokenIdentifier(jti)).thenReturn(false);
+
+        authService.logout(token, email);
+
+        ArgumentCaptor<RevokedToken> captor = ArgumentCaptor.forClass(RevokedToken.class);
+        verify(revokedTokenRepository).save(captor.capture());
+
+        RevokedToken saved = captor.getValue();
+        assertThat(saved.getTokenIdentifier()).isEqualTo(jti);
+        assertThat(saved.getUser()).isEqualTo(user);
+        assertThat(saved.getExpiresAt()).isEqualTo(exp);
+        assertThat(saved.getRevokedAt()).isNotNull();
+        assertThat(saved.getReason()).isEqualTo("LOGOUT");
+    }
+
+    @Test
+    @DisplayName("logout — already revoked token is idempotent and does not save duplicate")
+    void logout_alreadyRevoked_isIdempotent() {
+        String token = "already.revoked.token";
+        String email = "bob@example.com";
+        String jti = "jti-uuid-5678";
+
+        User user = new User(email, "hashedPassword", "Bob");
+
+        when(jwtService.extractJti(token)).thenReturn(jti);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(revokedTokenRepository.existsByTokenIdentifier(jti)).thenReturn(true);
+
+        authService.logout(token, email);
+
+        verify(revokedTokenRepository, never()).save(any(RevokedToken.class));
+    }
+
+    @Test
+    @DisplayName("logout — unknown user throws UserNotFoundException")
+    void logout_userNotFound_throwsException() {
+        String token = "some.token";
+        String email = "ghost@example.com";
+
+        when(jwtService.extractJti(token)).thenReturn("jti-ghost");
+        when(userRepository.findByEmail(email)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> authService.logout(token, email))
+                .isInstanceOf(UserNotFoundException.class)
+                .hasMessageContaining(email);
+
+        verify(revokedTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("logout — token lacking expiration throws InvalidCredentialsException without fabricating timestamp")
+    void logout_missingExpiration_throwsInvalidCredentialsException() {
+        String token = "no-exp.token";
+        String email = "alice@example.com";
+        String jti = "jti-no-exp";
+
+        User user = new User(email, "hashedPassword", "Alice");
+
+        when(jwtService.extractJti(token)).thenReturn(jti);
+        when(userRepository.findByEmail(email)).thenReturn(Optional.of(user));
+        when(revokedTokenRepository.existsByTokenIdentifier(jti)).thenReturn(false);
+        when(jwtService.extractExpiration(token)).thenReturn(null);
+
+        assertThatThrownBy(() -> authService.logout(token, email))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("missing expiration");
+
+        verify(revokedTokenRepository, never()).save(any());
+    }
+
+    @Test
+    @DisplayName("logout — token lacking JTI throws InvalidCredentialsException")
+    void logout_missingJti_throwsInvalidCredentialsException() {
+        String token = "no-jti.token";
+        String email = "alice@example.com";
+
+        when(jwtService.extractJti(token)).thenReturn(null);
+
+        assertThatThrownBy(() -> authService.logout(token, email))
+                .isInstanceOf(InvalidCredentialsException.class)
+                .hasMessageContaining("missing token identifier");
+
+        verify(revokedTokenRepository, never()).save(any());
     }
 }

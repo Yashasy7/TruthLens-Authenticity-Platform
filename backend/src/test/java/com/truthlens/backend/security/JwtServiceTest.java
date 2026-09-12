@@ -83,6 +83,31 @@ class JwtServiceTest {
         // Check roles are prefixed with ROLE_
         List<String> roles = jwtService.extractRoles(token);
         assertThat(roles).containsExactlyInAnyOrder("ROLE_USER", "ROLE_ANALYST");
+
+        // Check JTI is present and extractable
+        String jti = jwtService.extractJti(token);
+        assertThat(jti).isNotBlank();
+        assertThat(UUID.fromString(jti)).isNotNull();
+
+        // Check expiration is extractable and in the future
+        assertThat(jwtService.extractExpiration(token)).isNotNull();
+    }
+
+    @Test
+    @DisplayName("generateToken — assigns unique JTI to each generated token")
+    void generateToken_uniqueJti() {
+        User user1 = createSampleUser("user1@truthlens.io", UUID.randomUUID(), RoleName.USER);
+        User user2 = createSampleUser("user2@truthlens.io", UUID.randomUUID(), RoleName.USER);
+
+        String token1 = jwtService.generateToken(user1);
+        String token2 = jwtService.generateToken(user2);
+
+        String jti1 = jwtService.extractJti(token1);
+        String jti2 = jwtService.extractJti(token2);
+
+        assertThat(jti1).isNotBlank();
+        assertThat(jti2).isNotBlank();
+        assertThat(jti1).isNotEqualTo(jti2);
     }
 
     @Test
