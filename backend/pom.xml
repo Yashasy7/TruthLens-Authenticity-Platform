@@ -76,6 +76,21 @@
         </dependency>
 
         <!-- ======================================================= -->
+        <!-- Flyway — versioned schema migration (Stage 3)            -->
+        <!-- ======================================================= -->
+        <!-- flyway-core: the Flyway migration engine                 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <!-- flyway-database-postgresql: PostgreSQL-specific support  -->
+        <!-- Required by Flyway 10+; version managed by Spring Boot   -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+
+        <!-- ======================================================= -->
         <!-- Test                                                      -->
         <!-- ======================================================= -->
         <dependency>
