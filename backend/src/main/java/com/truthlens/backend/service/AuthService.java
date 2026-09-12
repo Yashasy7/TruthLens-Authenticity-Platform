@@ -13,6 +13,7 @@ import com.truthlens.backend.exception.InvalidCredentialsException;
 import com.truthlens.backend.exception.RoleNotFoundException;
 import com.truthlens.backend.repository.RoleRepository;
 import com.truthlens.backend.repository.UserRepository;
+import com.truthlens.backend.security.JwtService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,21 +24,18 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Core authentication service for TruthLens — Stage 4.
+ * Core authentication service for TruthLens — Stage 5.
  *
  * <p>Handles user registration and login. Responsibilities:</p>
  * <ul>
  *   <li>Email normalisation (trim + lowercase) applied consistently to both
- *       registration and login so that lookups are case-insensitive in practice.</li>
- *   <li>BCrypt password hashing on registration via the injected
- *       {@link PasswordEncoder}.</li>
+ *       registration and login.</li>
+ *   <li>BCrypt password hashing on registration via {@link PasswordEncoder}.</li>
  *   <li>Duplicate email detection before persistence.</li>
- *   <li>USER role assignment from the database seed data on registration.</li>
+ *   <li>USER role assignment from database seed data on registration.</li>
  *   <li>Credential verification and account status check on login.</li>
+ *   <li>Signed JWT token generation upon successful login via {@link JwtService}.</li>
  * </ul>
- *
- * <p><strong>Stage boundary:</strong> JWT generation and Spring Security
- * {@code UserDetailsService} integration belong to Stage 5 and are absent here.</p>
  */
 @Service
 public class AuthService {
@@ -47,6 +45,7 @@ public class AuthService {
     private final UserRepository    userRepository;
     private final RoleRepository    roleRepository;
     private final PasswordEncoder   passwordEncoder;
+    private final JwtService        jwtService;
 
     // -------------------------------------------------------------------------
     // Constructor injection — no field injection
@@ -54,10 +53,12 @@ public class AuthService {
 
     public AuthService(UserRepository userRepository,
                        RoleRepository roleRepository,
-                       PasswordEncoder passwordEncoder) {
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService) {
         this.userRepository  = userRepository;
         this.roleRepository  = roleRepository;
         this.passwordEncoder = passwordEncoder;
+        this.jwtService      = jwtService;
     }
 
     // -------------------------------------------------------------------------
@@ -137,7 +138,7 @@ public class AuthService {
      *       {@link InvalidCredentialsException} (HTTP 401) on mismatch.</li>
      *   <li>Check account status — throw {@link AccountSuspendedException}
      *       (HTTP 403) if suspended.</li>
-     *   <li>Return a safe {@link AuthResponse} (no JWT at this stage).</li>
+     *   <li>Generate a signed JWT and return a safe {@link AuthResponse} containing the token.</li>
      * </ol>
      *
      * @param request the login request DTO (pre-validated by the controller)
@@ -167,8 +168,11 @@ public class AuthService {
 
         log.info("Successful login: id={}, email={}", user.getId(), user.getEmail());
 
-        // Step 5 — Return safe response (JWT generation is Stage 5)
-        return buildAuthResponse("Login successful", user);
+        // Step 5 — Generate signed JWT token
+        String token = jwtService.generateToken(user);
+
+        // Step 6 — Return safe response containing JWT
+        return buildAuthResponse("Login successful", user, token, "Bearer");
     }
 
     // -------------------------------------------------------------------------
@@ -190,23 +194,36 @@ public class AuthService {
     }
 
     /**
-     * Builds a safe {@link AuthResponse} from a persisted {@link User}.
+     * Builds a safe {@link AuthResponse} from a persisted {@link User} without a JWT
+     * (used by registration).
+     */
+    private AuthResponse buildAuthResponse(String message, User user) {
+        return buildAuthResponse(message, user, null, null);
+    }
+
+    /**
+     * Builds a safe {@link AuthResponse} from a persisted {@link User} with a JWT
+     * (used by login).
      *
      * <p>The roles set is accessed here — callers must ensure this method is
      * invoked within an active transaction (or with an already-initialised
      * roles collection) to avoid a {@code LazyInitializationException}.</p>
      *
-     * @param message a short human-readable result message
-     * @param user    the user entity to map
+     * @param message   a short human-readable result message
+     * @param user      the user entity to map
+     * @param token     the signed JWT string (or null)
+     * @param tokenType the token type, e.g. "Bearer" (or null)
      * @return the constructed {@link AuthResponse}
      */
-    private AuthResponse buildAuthResponse(String message, User user) {
+    private AuthResponse buildAuthResponse(String message, User user, String token, String tokenType) {
         Set<String> roleNames = user.getRoles().stream()
                 .map(role -> role.getName().name())
                 .collect(Collectors.toSet());
 
         return new AuthResponse(
                 message,
+                token,
+                tokenType,
                 user.getId(),
                 user.getEmail(),
                 user.getFullName(),

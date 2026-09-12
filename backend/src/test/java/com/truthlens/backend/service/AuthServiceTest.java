@@ -12,6 +12,7 @@ import com.truthlens.backend.exception.EmailAlreadyExistsException;
 import com.truthlens.backend.exception.InvalidCredentialsException;
 import com.truthlens.backend.repository.RoleRepository;
 import com.truthlens.backend.repository.UserRepository;
+import com.truthlens.backend.security.JwtService;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -30,6 +31,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -49,6 +51,9 @@ class AuthServiceTest {
     @Mock
     private RoleRepository roleRepository;
 
+    @Mock
+    private JwtService jwtService;
+
     // Use a real BCrypt encoder at cost 4 — fast in tests, real behaviour.
     private final PasswordEncoder passwordEncoder = new BCryptPasswordEncoder(4);
 
@@ -56,7 +61,7 @@ class AuthServiceTest {
 
     @BeforeEach
     void setUp() {
-        authService = new AuthService(userRepository, roleRepository, passwordEncoder);
+        authService = new AuthService(userRepository, roleRepository, passwordEncoder, jwtService);
     }
 
     // =========================================================================
@@ -85,6 +90,9 @@ class AuthServiceTest {
         assertThat(response.getFullName()).isEqualTo("Alice Example");
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
         assertThat(response.getRoles()).containsExactly("USER");
+        assertThat(response.getToken()).isNull();
+        assertThat(response.getTokenType()).isNull();
+        verifyNoInteractions(jwtService);
 
         // Verify the saved entity has a BCrypt hash, NOT the plaintext password
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
@@ -167,7 +175,7 @@ class AuthServiceTest {
     // =========================================================================
 
     @Test
-    @DisplayName("login — successful login with correct password returns AuthResponse")
+    @DisplayName("login — successful login with correct password returns AuthResponse with JWT token")
     void login_success() {
         String rawPassword = "correctPassword9";
         String hash = passwordEncoder.encode(rawPassword);
@@ -179,6 +187,7 @@ class AuthServiceTest {
 
         when(userRepository.findByEmail("bob@example.com"))
                 .thenReturn(Optional.of(user));
+        when(jwtService.generateToken(user)).thenReturn("mocked.jwt.token");
 
         LoginRequest request = new LoginRequest("bob@example.com", rawPassword);
         AuthResponse response = authService.login(request);
@@ -187,6 +196,9 @@ class AuthServiceTest {
         assertThat(response.getEmail()).isEqualTo("bob@example.com");
         assertThat(response.getStatus()).isEqualTo("ACTIVE");
         assertThat(response.getRoles()).containsExactly("USER");
+        assertThat(response.getToken()).isEqualTo("mocked.jwt.token");
+        assertThat(response.getTokenType()).isEqualTo("Bearer");
+        verify(jwtService).generateToken(user);
     }
 
     @Test
@@ -199,6 +211,7 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("Invalid email or password.");
+        verify(jwtService, never()).generateToken(any());
     }
 
     @Test
@@ -216,6 +229,7 @@ class AuthServiceTest {
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(InvalidCredentialsException.class)
                 .hasMessage("Invalid email or password.");
+        verify(jwtService, never()).generateToken(any());
     }
 
     @Test
@@ -232,6 +246,7 @@ class AuthServiceTest {
 
         assertThatThrownBy(() -> authService.login(request))
                 .isInstanceOf(AccountSuspendedException.class);
+        verify(jwtService, never()).generateToken(any());
     }
 
     @Test
@@ -245,12 +260,16 @@ class AuthServiceTest {
         // Service normalises to lowercase before calling the repository
         when(userRepository.findByEmail("eve@example.com"))
                 .thenReturn(Optional.of(user));
+        when(jwtService.generateToken(user)).thenReturn("mocked.jwt.token");
 
         LoginRequest request = new LoginRequest("  EVE@EXAMPLE.COM  ", "password123");
         AuthResponse response = authService.login(request);
 
         assertThat(response.getEmail()).isEqualTo("eve@example.com");
+        assertThat(response.getToken()).isEqualTo("mocked.jwt.token");
+        assertThat(response.getTokenType()).isEqualTo("Bearer");
         verify(userRepository).findByEmail("eve@example.com");
+        verify(jwtService).generateToken(user);
     }
 
     @Test
@@ -263,10 +282,14 @@ class AuthServiceTest {
 
         when(userRepository.findByEmail("frank@example.com"))
                 .thenReturn(Optional.of(user));
+        when(jwtService.generateToken(user)).thenReturn("mocked.jwt.token");
 
         LoginRequest request = new LoginRequest("frank@example.com", "password123");
         AuthResponse response = authService.login(request);
 
         assertThat(response.getStatus()).isEqualTo("PENDING_VERIFICATION");
+        assertThat(response.getToken()).isEqualTo("mocked.jwt.token");
+        assertThat(response.getTokenType()).isEqualTo("Bearer");
+        verify(jwtService).generateToken(user);
     }
 }
