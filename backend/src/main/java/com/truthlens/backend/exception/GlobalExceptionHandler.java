@@ -28,6 +28,7 @@ import java.util.stream.Collectors;
  *   <li>{@link InvalidCredentialsException}     → 401 Unauthorized</li>
  *   <li>{@link AccountSuspendedException}       → 403 Forbidden</li>
  *   <li>{@link AccessDeniedException}           → 403 Forbidden</li>
+ *   <li>{@link UserNotFoundException}           → 404 Not Found</li>
  *   <li>{@link RoleNotFoundException}           → 500 Internal Server Error</li>
  *   <li>{@link Exception} (catch-all)           → 500 Internal Server Error</li>
  * </ul>
@@ -142,6 +143,24 @@ public class GlobalExceptionHandler {
                         HttpStatus.FORBIDDEN.value(),
                         "FORBIDDEN",
                         "Access denied. You do not have permission to access this resource.",
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles user account not found — HTTP 404 Not Found.
+     */
+    @ExceptionHandler(UserNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleUserNotFound(
+            UserNotFoundException ex, HttpServletRequest request) {
+
+        log.debug("User not found on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(
+                        HttpStatus.NOT_FOUND.value(),
+                        "USER_NOT_FOUND",
+                        ex.getMessage(),
                         request.getRequestURI()));
     }
 
