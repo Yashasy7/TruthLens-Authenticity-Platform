@@ -69,7 +69,7 @@ public class User {
      * The user's email address. This is the unique authentication identifier.
      * A database-level unique index is created by the Flyway migration.
      */
-    @Column(name = "email", nullable = false, unique = true, length = 100)
+    @Column(name = "email", nullable = false, unique = true, length = 255)
     private String email;
 
     /**
@@ -88,7 +88,7 @@ public class User {
      * The user's display name. Optional at this stage; populated during
      * registration or profile update.
      */
-    @Column(name = "full_name", length = 255)
+    @Column(name = "full_name", length = 100)
     private String fullName;
 
     // -------------------------------------------------------------------------
