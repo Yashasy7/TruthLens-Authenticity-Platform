@@ -185,6 +185,82 @@ public class GlobalExceptionHandler {
     }
 
     // -------------------------------------------------------------------------
+    // Module 02 — Media Ingestion exceptions
+    // -------------------------------------------------------------------------
+
+    /**
+     * Handles invalid media, unsupported MIME types, or empty uploads — HTTP 400 Bad Request.
+     */
+    @ExceptionHandler(InvalidMediaException.class)
+    public ResponseEntity<ApiErrorResponse> handleInvalidMedia(
+            InvalidMediaException ex, HttpServletRequest request) {
+
+        log.debug("Invalid media upload on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "INVALID_MEDIA",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles file size limit exceeded — HTTP 413 Payload Too Large.
+     */
+    @ExceptionHandler({FileSizeExceededException.class, org.springframework.web.multipart.MaxUploadSizeExceededException.class})
+    public ResponseEntity<ApiErrorResponse> handleFileSizeExceeded(
+            Exception ex, HttpServletRequest request) {
+
+        log.debug("File size exceeded limit on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.PAYLOAD_TOO_LARGE)
+                .body(new ApiErrorResponse(
+                        HttpStatus.PAYLOAD_TOO_LARGE.value(),
+                        "FILE_SIZE_EXCEEDED",
+                        "The uploaded file exceeds the configured maximum upload size limit.",
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles media record not found — HTTP 404 Not Found.
+     */
+    @ExceptionHandler(MediaNotFoundException.class)
+    public ResponseEntity<ApiErrorResponse> handleMediaNotFound(
+            MediaNotFoundException ex, HttpServletRequest request) {
+
+        log.debug("Media not found on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.NOT_FOUND)
+                .body(new ApiErrorResponse(
+                        HttpStatus.NOT_FOUND.value(),
+                        "MEDIA_NOT_FOUND",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles quarantined storage or I/O failures — HTTP 500 Internal Server Error.
+     */
+    @ExceptionHandler(StorageException.class)
+    public ResponseEntity<ApiErrorResponse> handleStorageException(
+            StorageException ex, HttpServletRequest request) {
+
+        log.error("Storage failure on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(new ApiErrorResponse(
+                        HttpStatus.INTERNAL_SERVER_ERROR.value(),
+                        "STORAGE_ERROR",
+                        "An error occurred while handling media storage. The operation was aborted.",
+                        request.getRequestURI()));
+    }
+
+    // -------------------------------------------------------------------------
     // Catch-all — HTTP 500
     // -------------------------------------------------------------------------
 
