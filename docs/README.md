@@ -47,8 +47,8 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 | Module ID | Module Name | Primary Blueprint Owner | Repository Status | Current Deliverables |
 | :--- | :--- | :--- | :--- | :--- |
 | **Module 01** | **Authentication, RBAC & User Management** | Yashas | **Implemented (Backend Core)** | Spring Security 6, JWT, RBAC, Flyway V1, 57 automated tests |
-| **Module 02** | **Media Upload & Secure Ingestion** | Yashas + Vishal | **Implemented (Backend Core)** | Apache Tika validation, SHA-256 hashing, quarantine storage, Flyway V2, 35 tests |
-| **Module 03** | Media Fingerprinting & Duplicate Detection | Vishal | *Planned* | - |
+| **Module 02** | **Media Upload & Secure Ingestion** | Yashas + Vishal | **Implemented (Backend Core)** | Apache Tika validation, SHA-256 hashing, quarantine storage, Flyway V2, 44 tests |
+| **Module 03** | **Media Fingerprinting & Duplicate Detection** | Yashas + Vishal | **Implemented (Backend Core)** | SHA-256, dHash visual perceptual hashing, audio chromaprint, Flyway V3, 29 tests |
 | **Module 04** | Metadata & Digital Forensics | Yashas | *Planned* | - |
 | **Module 05** | Image Authenticity Analysis | Vishal | *Planned* | - |
 | **Module 06** | Video Deepfake & Forensic Analysis | Vishal | *Planned* | - |
