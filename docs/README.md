@@ -50,7 +50,7 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 | **Module 02** | **Media Upload & Secure Ingestion** | Yashas + Vishal | **Implemented (Backend Core)** | Apache Tika validation, SHA-256 hashing, quarantine storage, Flyway V2, 44 tests |
 | **Module 03** | **Media Fingerprinting & Duplicate Detection** | Yashas + Vishal | **Implemented (Backend Core)** | SHA-256, dHash visual perceptual hashing, audio chromaprint, Flyway V3, 50 tests |
 | **Module 04** | **Metadata & Digital Forensics** | Vishal + Yashas | **Implemented (Backend Core)** | EXIF/container/audio extraction (metadata-extractor, ExifTool & MediaInfo CLI wrapper), 8 anomaly detection rules, Flyway V4, 61 tests |
-| **Module 05** | Image Authenticity Analysis | Vishal | *Planned* | - |
+| **Module 05** | **Image Authenticity Analysis** | Vishal + Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine AI vision analysis: PyTorch Diffusion Classifier Net, Grad-CAM attention exporter, OpenCV ELA heatmap, spatial noise variance, 2D FFT spectral analysis, copy-move & splicing detector, Flyway V5, 44 tests (14 Python + 30 Java) |
 | **Module 06** | Video Deepfake & Forensic Analysis | Vishal | *Planned* | - |
 | **Module 07** | Audio Authenticity & Voice Forensics | Vishal | *Planned* | - |
 | **Module 08** | Audio-Video Synchronization Analysis | Vishal + Yashas | *Planned* | - |
@@ -74,9 +74,10 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 - [Architecture Overview](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/architecture/overview.md)
 - [Module 01: Authentication, RBAC & User Management](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-01-auth-rbac-user-management.md)
 - [Module 02: Media Upload & Secure Ingestion](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-02-media-upload-secure-ingestion.md)
-- [REST API: Authentication & User](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/authentication-user-api.md)
-- [REST API: Media Ingestion](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/media-ingestion-api.md)
-- [Database Schema: Auth V1](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-01.md)
-- [Database Schema: Media V2](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-02.md)
+- [Module 03: Media Fingerprinting & Duplicate Detection](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-03-media-fingerprinting-duplicate-detection.md)
+- [Module 04: Metadata & Digital Forensics](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-04-metadata-digital-forensics.md)
+- [Module 05: Image Authenticity Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-05-image-authenticity-analysis.md)
+- [REST API: Image Authenticity Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/image-analysis-api.md)
+- [Database Schema: Image Analysis V5](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-05.md)
 - [Developer Setup Guide](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/development/setup-guide.md)
 - [Testing Strategy & Test Suite](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/testing/test-strategy-and-suite.md)

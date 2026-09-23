@@ -260,9 +260,41 @@ public class GlobalExceptionHandler {
                         request.getRequestURI()));
     }
 
-    // -------------------------------------------------------------------------
-    // Catch-all — HTTP 500
-    // -------------------------------------------------------------------------
+    /**
+     * Handles downstream AI/ML service failures or timeouts — HTTP 502 Bad Gateway.
+     */
+    @ExceptionHandler(AiServiceException.class)
+    public ResponseEntity<ApiErrorResponse> handleAiServiceException(
+            AiServiceException ex, HttpServletRequest request) {
+
+        log.error("AI service failure on {}: {}", request.getRequestURI(), ex.getMessage(), ex);
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_GATEWAY)
+                .body(new ApiErrorResponse(
+                        HttpStatus.BAD_GATEWAY.value(),
+                        "AI_SERVICE_UNAVAILABLE",
+                        "The image authenticity analysis service is currently unavailable or encountered an error.",
+                        request.getRequestURI()));
+    }
+
+    /**
+     * Handles illegal argument and invalid parameter failures — HTTP 400 Bad Request.
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiErrorResponse> handleIllegalArgumentException(
+            IllegalArgumentException ex, HttpServletRequest request) {
+
+        log.debug("Invalid argument on {}: {}", request.getRequestURI(), ex.getMessage());
+
+        return ResponseEntity
+                .status(HttpStatus.BAD_REQUEST)
+                .body(new ApiErrorResponse(
+                        HttpStatus.BAD_REQUEST.value(),
+                        "INVALID_PARAMETER",
+                        ex.getMessage(),
+                        request.getRequestURI()));
+    }
 
     /**
      * Catch-all handler for unexpected exceptions.
