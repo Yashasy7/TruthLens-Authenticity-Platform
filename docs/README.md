@@ -51,7 +51,7 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 | **Module 03** | **Media Fingerprinting & Duplicate Detection** | Yashas + Vishal | **Implemented (Backend Core)** | SHA-256, dHash visual perceptual hashing, audio chromaprint, Flyway V3, 50 tests |
 | **Module 04** | **Metadata & Digital Forensics** | Vishal + Yashas | **Implemented (Backend Core)** | EXIF/container/audio extraction (metadata-extractor, ExifTool & MediaInfo CLI wrapper), 8 anomaly detection rules, Flyway V4, 61 tests |
 | **Module 05** | **Image Authenticity Analysis** | Vishal + Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine AI vision analysis: PyTorch Diffusion Classifier Net, Grad-CAM attention exporter, OpenCV ELA heatmap, spatial noise variance, 2D FFT spectral analysis, copy-move & splicing detector, Flyway V5, 44 tests (14 Python + 30 Java) |
-| **Module 06** | Video Deepfake & Forensic Analysis | Vishal | *Planned* | - |
+| **Module 06** | **Video Deepfake & Forensic Analysis** | Vishal | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine video deepfake analysis: FFmpeg/OpenCV keyframe extraction, PyTorch RetinaFace detector & tracking, PyTorch 3D-CNN spatiotemporal classifier net, optical flow temporal inconsistency, timeline suspicious markers, Flyway V6, 41 tests (15 Python + 26 Java) |
 | **Module 07** | Audio Authenticity & Voice Forensics | Vishal | *Planned* | - |
 | **Module 08** | Audio-Video Synchronization Analysis | Vishal + Yashas | *Planned* | - |
 | **Module 09** | OCR & Visual Text Extraction | Yashas | *Planned* | - |

@@ -9,6 +9,15 @@ from .services.ela_generator import ElaGenerator
 from .services.noise_analyzer import NoiseAnalyzer
 from .services.frequency_analyzer import FrequencyAnalyzer
 from .services.local_manipulation import LocalManipulationDetector
+from .services.video_pipeline import VideoAnalysisPipeline
+from .schemas import (
+    HealthResponse,
+    ImageAnalysisResult,
+    ImageAnalysisEvidence,
+    VideoAnalysisResult,
+)
+import tempfile
+import os
 
 # Singletons initialized at startup or lazily on demand
 model_service: ModelInferenceService | None = None
@@ -16,10 +25,11 @@ ela_generator: ElaGenerator | None = None
 noise_analyzer: NoiseAnalyzer | None = None
 frequency_analyzer: FrequencyAnalyzer | None = None
 manipulation_detector: LocalManipulationDetector | None = None
+video_pipeline: VideoAnalysisPipeline | None = None
 
 
 def init_services():
-    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector
+    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline
     if model_service is None:
         model_service = ModelInferenceService()
     if ela_generator is None:
@@ -30,6 +40,8 @@ def init_services():
         frequency_analyzer = FrequencyAnalyzer()
     if manipulation_detector is None:
         manipulation_detector = LocalManipulationDetector()
+    if video_pipeline is None:
+        video_pipeline = VideoAnalysisPipeline()
 
 
 @asynccontextmanager
@@ -40,8 +52,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="TruthLens AI/ML Service",
-    description="Dual-engine Image Authenticity & Digital Forensics Analysis (Module 05)",
-    version="0.1.0",
+    description="Dual-engine Image & Video Authenticity & Digital Forensics Analysis (Modules 05 & 06)",
+    version="0.2.0",
     lifespan=lifespan
 )
 
@@ -144,6 +156,70 @@ async def analyze_image(file: UploadFile = File(...)):
         )
 
 
+@app.post("/api/v1/analyze/video", response_model=VideoAnalysisResult)
+async def analyze_video(file: UploadFile = File(...)):
+    """
+    Executes deepfake and forensic video analysis (Module 06):
+    1. Deterministic frame sampling via FFmpeg / OpenCV
+    2. RetinaFace face detection and temporal tracking
+    3. PyTorch 3D-CNN / EfficientNet deepfake model inference
+    4. Temporal frame inconsistency and optical flow analysis
+    5. Suspicious timestamp marker generation
+    """
+    init_services()
+    if file.content_type and not file.content_type.startswith("video/"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported media content type: '{file.content_type}'. Must be a video."
+        )
+
+    # Save incoming stream into a secure temporary video file
+    suffix = ".mp4"
+    if file.filename and "." in file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in [".mp4", ".mov", ".avi", ".webm", ".mkv", ".mpeg"]:
+            suffix = ext
+
+    fd, temp_video_path = tempfile.mkstemp(prefix="truthlens_video_upload_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        total_bytes = 0
+        with open(temp_video_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > settings.MAX_VIDEO_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Video exceeds maximum allowed size ({settings.MAX_VIDEO_SIZE_BYTES} bytes)."
+                    )
+                out_file.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded video file is empty.")
+
+        # Execute analysis pipeline
+        result = video_pipeline.analyze_video(temp_video_path)
+        return result
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Video analysis pipeline failure: {str(e)}"
+        )
+    finally:
+        if os.path.exists(temp_video_path):
+            try:
+                os.remove(temp_video_path)
+            except OSError:
+                pass
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("ai-ml.app.main:app", host=settings.HOST, port=settings.PORT, reload=False)
+

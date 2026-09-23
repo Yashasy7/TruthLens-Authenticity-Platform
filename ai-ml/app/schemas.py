@@ -36,3 +36,55 @@ class ImageAnalysisResult(BaseModel):
     gradcam_heatmap_base64: Optional[str] = Field(default=None, description="Base64-encoded PNG of Grad-CAM attention map")
     evidence: ImageAnalysisEvidence
     status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+
+
+# =============================================================================
+# Module 06 — Video Deepfake & Forensic Analysis Schemas
+# =============================================================================
+
+class FaceBoundingBox(BaseModel):
+    x: int = Field(description="Left pixel coordinate")
+    y: int = Field(description="Top pixel coordinate")
+    width: int = Field(description="Bounding box width")
+    height: int = Field(description="Bounding box height")
+    confidence: float = Field(ge=0.0, le=1.0, description="Face detector confidence score")
+    track_id: int = Field(description="Unique continuous face track identifier across video frames")
+    landmarks: Optional[list[list[float]]] = Field(default=None, description="5-point facial landmark coordinates [[x, y], ...]")
+
+
+class VideoFrameScore(BaseModel):
+    frame_index: int = Field(description="Zero-based sequence index of the sampled frame")
+    timestamp_seconds: float = Field(description="Exact timestamp in seconds from video start")
+    deepfake_score: float = Field(ge=0.0, le=1.0, description="AI face swap / deepfake manipulation score")
+    temporal_inconsistency: float = Field(ge=0.0, le=1.0, description="Frame-to-frame inconsistency anomaly metric")
+    faces_detected: int = Field(description="Number of faces detected in this frame")
+    is_suspicious: bool = Field(description="Whether this frame exceeds the suspicious artifact threshold")
+
+
+class SuspiciousTimestamp(BaseModel):
+    timestamp_seconds: float = Field(description="Suspicious occurrence timestamp in seconds")
+    frame_index: int = Field(description="Sampled frame sequence index")
+    score: float = Field(ge=0.0, le=1.0, description="Composite anomaly score triggering the marker")
+    reason: str = Field(description="Forensic rationale code, e.g. HIGH_DEEPFAKE_PROBABILITY, TEMPORAL_INCONSISTENCY")
+
+
+class VideoAnalysisEvidence(BaseModel):
+    face_count: int = Field(description="Total distinct face tracks observed")
+    total_frames_sampled: int = Field(description="Total number of video frames analyzed")
+    duration_seconds: float = Field(description="Estimated or extracted video duration in seconds")
+    frame_scores: list[VideoFrameScore] = Field(default_factory=list, description="Per-frame scores")
+    suspicious_timestamps: list[SuspiciousTimestamp] = Field(default_factory=list, description="Marked timestamps")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Supplementary forensic metrics")
+
+
+class VideoAnalysisResult(BaseModel):
+    deepfake_prob: float = Field(ge=0.0, le=1.0, description="Aggregate video deepfake probability score")
+    face_count: int = Field(description="Count of distinct face tracks detected")
+    total_frames_sampled: int = Field(description="Number of frames sampled and analyzed")
+    suspicious_timestamps: list[SuspiciousTimestamp] = Field(default_factory=list, description="Marked suspicious timestamps")
+    frame_scores: list[VideoFrameScore] = Field(default_factory=list, description="Detailed per-frame scores")
+    model_name: str = Field(description="Name of PyTorch video deepfake classifier architecture")
+    model_version: str = Field(description="Version of model weights / checkpoint")
+    evidence: VideoAnalysisEvidence
+    status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+

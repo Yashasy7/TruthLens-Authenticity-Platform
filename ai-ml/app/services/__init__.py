@@ -1,1 +1,15 @@
-"""Image forensic and authenticity analysis services."""
+"""Multimedia forensic and authenticity analysis services."""
+from .ela_generator import ElaGenerator
+from .noise_analyzer import NoiseAnalyzer
+from .frequency_analyzer import FrequencyAnalyzer
+from .local_manipulation import LocalManipulationDetector
+from .model_inference import ModelInferenceService, DiffusionClassifierNet
+from .gradcam_exporter import GradCamExporter
+
+# Module 06 Video Forensics Services
+from .ffmpeg_sampler import FFmpegVideoSampler, SampledFrame
+from .face_detector_tracker import RetinaFaceDetector, RetinaFaceTracker, RetinaFaceNet, DetectedFace
+from .video_deepfake_classifier import VideoDeepfake3DCNNNet, VideoDeepfakeClassifierNet, VideoDeepfakeInferenceService
+from .temporal_analyzer import TemporalForensicAnalyzer
+from .video_pipeline import VideoAnalysisPipeline
+
