@@ -10,11 +10,13 @@ from .services.noise_analyzer import NoiseAnalyzer
 from .services.frequency_analyzer import FrequencyAnalyzer
 from .services.local_manipulation import LocalManipulationDetector
 from .services.video_pipeline import VideoAnalysisPipeline
+from .services.audio_pipeline import AudioAnalysisPipeline
 from .schemas import (
     HealthResponse,
     ImageAnalysisResult,
     ImageAnalysisEvidence,
     VideoAnalysisResult,
+    AudioAnalysisResult,
 )
 import tempfile
 import os
@@ -26,10 +28,11 @@ noise_analyzer: NoiseAnalyzer | None = None
 frequency_analyzer: FrequencyAnalyzer | None = None
 manipulation_detector: LocalManipulationDetector | None = None
 video_pipeline: VideoAnalysisPipeline | None = None
+audio_pipeline: AudioAnalysisPipeline | None = None
 
 
 def init_services():
-    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline
+    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline
     if model_service is None:
         model_service = ModelInferenceService()
     if ela_generator is None:
@@ -42,6 +45,8 @@ def init_services():
         manipulation_detector = LocalManipulationDetector()
     if video_pipeline is None:
         video_pipeline = VideoAnalysisPipeline()
+    if audio_pipeline is None:
+        audio_pipeline = AudioAnalysisPipeline()
 
 
 @asynccontextmanager
@@ -52,8 +57,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="TruthLens AI/ML Service",
-    description="Dual-engine Image & Video Authenticity & Digital Forensics Analysis (Modules 05 & 06)",
-    version="0.2.0",
+    description="Multi-Modal Image, Video & Audio Authenticity & Digital Forensics Analysis (Modules 05, 06, 07)",
+    version="0.3.0",
     lifespan=lifespan
 )
 
@@ -215,6 +220,72 @@ async def analyze_video(file: UploadFile = File(...)):
         if os.path.exists(temp_video_path):
             try:
                 os.remove(temp_video_path)
+            except OSError:
+                pass
+
+
+@app.post("/api/v1/analyze/audio", response_model=AudioAnalysisResult)
+async def analyze_audio(file: UploadFile = File(...)):
+    """
+    Executes acoustic authenticity and voice forensic analysis (Module 07):
+    1. 80-band Mel-spectrogram extraction via Librosa
+    2. Fundamental frequency (F0) & pitch variance estimation via YIN
+    3. STFT phase discontinuity calculation
+    4. Spectral statistics & splice boundary detection
+    5. PyTorch AASIST Spectro-Temporal Graph Attention Network classification
+    6. Audio authenticity & voice cloning probability generation
+    """
+    init_services()
+    if file.content_type and not (
+        file.content_type.startswith("audio/")
+        or file.content_type.startswith("video/")
+        or file.content_type in ["application/octet-stream"]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported media content type: '{file.content_type}'. Must be an audio or video format."
+        )
+
+    suffix = ".wav"
+    if file.filename and "." in file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in [".wav", ".mp3", ".flac", ".ogg", ".m4a", ".aac", ".wma", ".mp4", ".mov", ".mkv"]:
+            suffix = ext
+
+    fd, temp_audio_path = tempfile.mkstemp(prefix="truthlens_audio_upload_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        total_bytes = 0
+        with open(temp_audio_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > settings.MAX_AUDIO_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Audio exceeds maximum allowed size ({settings.MAX_AUDIO_SIZE_BYTES} bytes)."
+                    )
+                out_file.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded audio file is empty.")
+
+        result = audio_pipeline.analyze_audio(temp_audio_path)
+        return result
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Audio analysis pipeline failure: {str(e)}"
+        )
+    finally:
+        if os.path.exists(temp_audio_path):
+            try:
+                os.remove(temp_audio_path)
             except OSError:
                 pass
 

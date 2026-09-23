@@ -88,3 +88,39 @@ class VideoAnalysisResult(BaseModel):
     evidence: VideoAnalysisEvidence
     status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
 
+
+# =============================================================================
+# Module 07 — Audio Authenticity & Voice Forensics Schemas
+# =============================================================================
+
+class AudioSpliceMarker(BaseModel):
+    timestamp_seconds: float = Field(description="Timestamp in seconds of suspected audio splicing transition")
+    score: float = Field(ge=0.0, le=1.0, description="Anomaly confidence of splicing boundary")
+    reason: str = Field(description="Forensic rationale, e.g. SPECTRAL_FLUX_JUMP, PHASE_DISCONTINUITY, ENERGY_SHIFT")
+
+
+class AudioEvidence(BaseModel):
+    duration_seconds: float = Field(description="Total analyzed audio duration in seconds")
+    pitch_mean: float = Field(description="Mean estimated fundamental frequency (F0 in Hz)")
+    pitch_variance: float = Field(description="Variance of estimated fundamental frequency across voiced frames")
+    spectral_centroid_mean: float = Field(description="Mean spectral centroid frequency (Hz)")
+    spectral_bandwidth_mean: float = Field(description="Mean spectral bandwidth (Hz)")
+    spectral_rolloff_mean: float = Field(description="Mean spectral rolloff frequency (Hz)")
+    zero_crossing_rate_mean: float = Field(description="Mean rate of signal sign-changes")
+    phase_discontinuity_score: float = Field(ge=0.0, le=1.0, description="Phase coherence anomaly indicator")
+    splice_markers: list[AudioSpliceMarker] = Field(default_factory=list, description="Detected splice boundary anomalies")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Supplementary acoustic forensic metrics")
+
+
+class AudioAnalysisResult(BaseModel):
+    synthetic_voice_prob: float = Field(ge=0.0, le=1.0, description="Probability of synthetic voice cloning / neural TTS")
+    spectrogram_url: Optional[str] = Field(default=None, description="Artifact URL to generated Mel-spectrogram image")
+    spectrogram_base64: Optional[str] = Field(default=None, description="Base64-encoded PNG image of Mel-spectrogram")
+    pitch_variance: float = Field(description="Acoustic pitch variance metric")
+    splice_markers: list[AudioSpliceMarker] = Field(default_factory=list, description="Suspected splicing transition markers")
+    model_name: str = Field(description="Name of audio authenticity classifier architecture (AASIST)")
+    model_version: str = Field(description="Model weights checkpoint version identifier")
+    evidence: AudioEvidence = Field(description="Granular acoustic evidence metrics")
+    status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+
+

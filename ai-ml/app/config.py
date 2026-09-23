@@ -25,6 +25,13 @@ class Settings(BaseSettings):
     VIDEO_MAX_DURATION_SECONDS: int = 300  # 5 minutes maximum video length
     VIDEO_PROCESSING_TIMEOUT_SECONDS: int = 60  # Subprocess timeout
 
+    # Module 07 Audio Authenticity Configuration
+    AUDIO_MODEL_PATH: str = os.getenv("TRUTHLENS_AUDIO_MODEL_PATH", "")
+    MAX_AUDIO_SIZE_BYTES: int = 50 * 1024 * 1024  # 50 MB max audio upload
+    AUDIO_SAMPLE_RATE: int = 16000  # 16 kHz standard forensic sample rate
+    AUDIO_MAX_DURATION_SECONDS: int = 300  # 5 minutes maximum audio length
+    AUDIO_PROCESSING_TIMEOUT_SECONDS: int = 60  # Subprocess timeout
+
     model_config = SettingsConfigDict(env_prefix="TRUTHLENS_AI_")
 
 

@@ -13,3 +13,9 @@ from .video_deepfake_classifier import VideoDeepfake3DCNNNet, VideoDeepfakeClass
 from .temporal_analyzer import TemporalForensicAnalyzer
 from .video_pipeline import VideoAnalysisPipeline
 
+# Module 07 Audio Forensics Services
+from .librosa_extractor import LibrosaAcousticExtractor, DecodedAudio
+from .spectrogram_generator import SpectrogramGenerator
+from .aasist_classifier import GraphAttentionLayer, AASISTClassifierNet, AudioAuthenticityInferenceService
+from .audio_pipeline import AudioAnalysisPipeline
+
