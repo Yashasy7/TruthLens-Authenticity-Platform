@@ -51,8 +51,9 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 | **Module 03** | **Media Fingerprinting & Duplicate Detection** | Yashas + Vishal | **Implemented (Backend Core)** | SHA-256, dHash visual perceptual hashing, audio chromaprint, Flyway V3, 50 tests |
 | **Module 04** | **Metadata & Digital Forensics** | Vishal + Yashas | **Implemented (Backend Core)** | EXIF/container/audio extraction (metadata-extractor, ExifTool & MediaInfo CLI wrapper), 8 anomaly detection rules, Flyway V4, 61 tests |
 | **Module 05** | **Image Authenticity Analysis** | Vishal + Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine AI vision analysis: PyTorch Diffusion Classifier Net, Grad-CAM attention exporter, OpenCV ELA heatmap, spatial noise variance, 2D FFT spectral analysis, copy-move & splicing detector, Flyway V5, 44 tests (14 Python + 30 Java) |
+| **Module 06** | **Video Deepfake & Forensic Analysis** | Vishal + Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine video deepfake analysis: FFmpeg video frame sampler, PyTorch RetinaFace detector & spatial-temporal tracker, PyTorch 3D-CNN spatiotemporal classifier net, optical flow temporal analyzer, Flyway V6, 46 tests (15 Python + 31 Java) |
 | **Module 07** | **Audio Authenticity & Voice Forensics** | Vishal | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine audio authenticity analysis: Librosa 80-band Mel-spectrogram extractor, YIN F0 pitch variance, STFT phase discontinuity, spectral statistics, onset spectral flux splicing markers, PyTorch AASIST GAT classifier net, Mel-spectrogram PNG/Base64 generator, Flyway V7, 35 tests (6 Python + 29 Java) |
-| **Module 08** | Audio-Video Synchronization Analysis | Vishal + Yashas | *Planned* | - |
+| **Module 08** | **Audio-Video Synchronization Analysis** | Vishal + Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Multi-modal AV sync analysis: MediaPipe lip tracker, acoustic speech envelope cross-correlation, PyTorch SyncNet two-stream evaluator, mismatch segment detection, Flyway V8, 38 tests (15 Python + 23 Java) |
 | **Module 09** | OCR & Visual Text Extraction | Yashas | *Planned* | - |
 | **Module 10** | Speech-to-Text & Transcript Extraction | Vishal | *Planned* | - |
 | **Module 11** | Text & Claim Analysis | Vishal + Yashas | *Planned* | - |
@@ -76,7 +77,10 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 - [Module 03: Media Fingerprinting & Duplicate Detection](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-03-media-fingerprinting-duplicate-detection.md)
 - [Module 04: Metadata & Digital Forensics](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-04-metadata-digital-forensics.md)
 - [Module 05: Image Authenticity Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-05-image-authenticity-analysis.md)
-- [REST API: Image Authenticity Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/image-analysis-api.md)
-- [Database Schema: Image Analysis V5](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-05.md)
+- [Module 06: Video Deepfake & Forensic Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-06-video-deepfake-forensic-analysis.md)
+- [Module 07: Audio Authenticity & Voice Forensics](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-07-audio-authenticity-voice-forensics.md)
+- [Module 08: Audio-Video Synchronization Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-08-audio-video-synchronization.md)
+- [REST API: AV Synchronization Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/av-sync-api.md)
+- [Database Schema: AV Sync Analysis V8](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-08.md)
 - [Developer Setup Guide](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/development/setup-guide.md)
 - [Testing Strategy & Test Suite](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/testing/test-strategy-and-suite.md)

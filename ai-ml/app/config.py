@@ -32,6 +32,15 @@ class Settings(BaseSettings):
     AUDIO_MAX_DURATION_SECONDS: int = 300  # 5 minutes maximum audio length
     AUDIO_PROCESSING_TIMEOUT_SECONDS: int = 60  # Subprocess timeout
 
+    # Module 08 AV Sync Configuration
+    SYNCNET_CHECKPOINT_PATH: str = os.getenv("TRUTHLENS_SYNCNET_CHECKPOINT_PATH", "")
+    MEDIAPIPE_MODEL_PATH: str = os.getenv("TRUTHLENS_MEDIAPIPE_MODEL_PATH", "")
+    AV_SYNC_FPS: float = 25.0  # Normalized target frame rate for AV sync evaluation
+    AV_SYNC_WINDOW_SECONDS: float = 1.0  # Sliding analysis window duration
+    AV_SYNC_STEP_SECONDS: float = 0.5  # Window hop duration
+    AV_SYNC_MAX_OFFSET_MS: int = 500  # Max temporal offset search boundary (+/- 500ms)
+    AV_SYNC_MAX_DURATION_SECONDS: int = 120  # Max AV sync analysis duration (2 minutes)
+
     model_config = SettingsConfigDict(env_prefix="TRUTHLENS_AI_")
 
 

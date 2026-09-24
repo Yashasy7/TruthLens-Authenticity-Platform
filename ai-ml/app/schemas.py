@@ -124,3 +124,43 @@ class AudioAnalysisResult(BaseModel):
     status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
 
 
+# =============================================================================
+# Module 08: Audio-Video Synchronization Analysis Schemas
+# =============================================================================
+
+class MismatchSegment(BaseModel):
+    """Represents a localized temporal window where audio-video desynchronization occurs."""
+    start_time: float = Field(description="Window start timestamp in seconds")
+    end_time: float = Field(description="Window end timestamp in seconds")
+    offset_ms: float = Field(description="Estimated lip-to-audio temporal offset in milliseconds for this segment")
+    confidence: float = Field(ge=0.0, le=1.0, description="Forensic confidence in mismatch detection (0.0 - 1.0)")
+    reason: str = Field(description="Diagnostic explanation (e.g. persistent offset, sync break, speech without mouth motion)")
+
+
+class AvSyncEvidence(BaseModel):
+    """Granular forensic evidence supporting the AV synchronization assessment."""
+    detected_faces_count: int = Field(description="Total face tracks observed across sampled frames")
+    selected_face_track_id: int = Field(description="Track ID of the primary speaker face selected for lip analysis")
+    video_duration_seconds: float = Field(description="Total video stream duration in seconds")
+    audio_duration_seconds: float = Field(description="Total demuxed audio stream duration in seconds")
+    fps: float = Field(description="Frame rate used during AV sync sampling")
+    envelope_correlation: float = Field(description="Normalized cross-correlation between audio envelope and visual lip activity (-1.0 to 1.0)")
+    syncnet_min_distance: float = Field(description="Minimum embedding distance measured by SyncNet (lower = better alignment)")
+    syncnet_confidence: float = Field(ge=0.0, le=1.0, description="SyncNet offset peak prominence confidence score (0.0 to 1.0)")
+    tracking_stability: float = Field(ge=0.0, le=1.0, description="Proportion of frames with stable lip landmark tracking")
+    is_development_model: bool = Field(default=True, description="True if operating in development mode without production fine-tuned weights")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Supplementary temporal curves and offset diagnostic details")
+
+
+class AvSyncAnalysisResult(BaseModel):
+    """Overall audio-video synchronization forensic analysis result."""
+    sync_score: float = Field(ge=0.0, le=1.0, description="Global AV sync score (1.0 = perfectly synchronized, 0.0 = severe desync/dubbing)")
+    lip_offset_ms: float = Field(description="Global estimated lip/audio offset in milliseconds (positive = audio lags video, negative = audio leads video)")
+    confidence: float = Field(ge=0.0, le=1.0, description="Overall forensic confidence score (0.0 to 1.0)")
+    mismatch_segments: list[MismatchSegment] = Field(default_factory=list, description="Localized temporal mismatch segments")
+    model_name: str = Field(description="AV synchronization model architecture name")
+    model_version: str = Field(description="Model weights checkpoint identifier")
+    evidence: AvSyncEvidence = Field(description="Comprehensive explainable forensic evidence")
+    status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+
+

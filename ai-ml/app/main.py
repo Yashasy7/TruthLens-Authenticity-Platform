@@ -11,12 +11,14 @@ from .services.frequency_analyzer import FrequencyAnalyzer
 from .services.local_manipulation import LocalManipulationDetector
 from .services.video_pipeline import VideoAnalysisPipeline
 from .services.audio_pipeline import AudioAnalysisPipeline
+from .services.av_sync_pipeline import AvSyncAnalysisPipeline
 from .schemas import (
     HealthResponse,
     ImageAnalysisResult,
     ImageAnalysisEvidence,
     VideoAnalysisResult,
     AudioAnalysisResult,
+    AvSyncAnalysisResult,
 )
 import tempfile
 import os
@@ -29,10 +31,11 @@ frequency_analyzer: FrequencyAnalyzer | None = None
 manipulation_detector: LocalManipulationDetector | None = None
 video_pipeline: VideoAnalysisPipeline | None = None
 audio_pipeline: AudioAnalysisPipeline | None = None
+av_sync_pipeline: AvSyncAnalysisPipeline | None = None
 
 
 def init_services():
-    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline
+    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline
     if model_service is None:
         model_service = ModelInferenceService()
     if ela_generator is None:
@@ -47,6 +50,8 @@ def init_services():
         video_pipeline = VideoAnalysisPipeline()
     if audio_pipeline is None:
         audio_pipeline = AudioAnalysisPipeline()
+    if av_sync_pipeline is None:
+        av_sync_pipeline = AvSyncAnalysisPipeline()
 
 
 @asynccontextmanager
@@ -57,8 +62,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="TruthLens AI/ML Service",
-    description="Multi-Modal Image, Video & Audio Authenticity & Digital Forensics Analysis (Modules 05, 06, 07)",
-    version="0.3.0",
+    description="Multi-Modal Image, Video, Audio & AV Synchronization Authenticity Forensics (Modules 05, 06, 07, 08)",
+    version="0.4.0",
     lifespan=lifespan
 )
 
@@ -286,6 +291,70 @@ async def analyze_audio(file: UploadFile = File(...)):
         if os.path.exists(temp_audio_path):
             try:
                 os.remove(temp_audio_path)
+            except OSError:
+                pass
+
+
+@app.post("/api/v1/analyze/av-sync", response_model=AvSyncAnalysisResult)
+async def analyze_av_sync(file: UploadFile = File(...)):
+    """
+    Executes Audio-Video Synchronization Analysis (Module 08):
+    1. Deterministic video frame sampling & MediaPipe lip tracking
+    2. Video audio track extraction & acoustic envelope calculation
+    3. Audio-visual envelope cross-correlation across temporal shifts
+    4. SyncNet dual-stream (visual CNN + audio CNN) cross-modal embedding distance evaluation
+    5. Overall sync score, lip_offset_ms, and mismatch segment detection
+    """
+    init_services()
+    if file.content_type and not (
+        file.content_type.startswith("video/")
+        or file.content_type in ["application/octet-stream"]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported media content type: '{file.content_type}'. Must be a video format containing audio."
+        )
+
+    suffix = ".mp4"
+    if file.filename and "." in file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in [".mp4", ".mov", ".avi", ".webm", ".mkv", ".mpeg"]:
+            suffix = ext
+
+    fd, temp_video_path = tempfile.mkstemp(prefix="truthlens_avsync_upload_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        total_bytes = 0
+        with open(temp_video_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > settings.MAX_VIDEO_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Video exceeds maximum allowed size ({settings.MAX_VIDEO_SIZE_BYTES} bytes)."
+                    )
+                out_file.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded video file is empty.")
+
+        result = av_sync_pipeline.analyze_video(temp_video_path)
+        return result
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"AV sync analysis pipeline failure: {str(e)}"
+        )
+    finally:
+        if os.path.exists(temp_video_path):
+            try:
+                os.remove(temp_video_path)
             except OSError:
                 pass
 

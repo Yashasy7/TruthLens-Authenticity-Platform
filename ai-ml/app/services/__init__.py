@@ -19,3 +19,9 @@ from .spectrogram_generator import SpectrogramGenerator
 from .aasist_classifier import GraphAttentionLayer, AASISTClassifierNet, AudioAuthenticityInferenceService
 from .audio_pipeline import AudioAnalysisPipeline
 
+# Module 08 Audio-Video Synchronization Services
+from .mediapipe_lip_tracker import MediaPipeLipTracker, LipTrackingResult, FrameLipData
+from .audio_envelope_correlator import AudioEnvelopeCorrelator, AudioEnvelopeResult
+from .syncnet_evaluator import SyncNetEvaluator, SyncNetDualModel, SyncNetVisualNet, SyncNetAudioNet
+from .av_sync_pipeline import AvSyncAnalysisPipeline
+
