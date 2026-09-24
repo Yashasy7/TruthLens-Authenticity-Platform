@@ -58,6 +58,12 @@ class Settings(BaseSettings):
     WHISPER_MAX_DURATION_SECONDS: int = 600  # 10 minutes maximum speech duration
     WHISPER_DOWNLOAD_ROOT: str = os.getenv("TRUTHLENS_WHISPER_DOWNLOAD_ROOT", "")
 
+    # Module 11 Text & Claim Analysis Configuration
+    SPACY_MODEL: str = os.getenv("TRUTHLENS_SPACY_MODEL", "en_core_web_sm")
+    CLAIM_MAX_TEXT_LENGTH: int = 100000  # Maximum characters per text analysis request
+    CLAIM_MAX_SENTENCES: int = 300  # Maximum sentences per request
+    CLAIM_MIN_CONFIDENCE_THRESHOLD: float = 0.20  # Minimum claim confidence score threshold
+
     model_config = SettingsConfigDict(env_prefix="TRUTHLENS_AI_")
 
 

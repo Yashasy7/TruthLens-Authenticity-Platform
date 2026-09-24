@@ -36,4 +36,7 @@ from .speech_preprocessor import SpeechPreprocessor, PreprocessedAudio
 from .speech_transcriber import SpeechTranscriber
 from .transcript_pipeline import TranscriptPipeline
 
+# Module 11 Text & Claim Analysis Services
+from .claim_extractor import ClaimExtractor
+
 

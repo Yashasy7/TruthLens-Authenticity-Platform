@@ -277,4 +277,64 @@ class TranscriptResult(BaseModel):
     error_message: Optional[str] = Field(default=None, description="Error message if transcription failed")
 
 
+# =============================================================================
+# Module 11: Text & Claim Analysis Schemas
+# =============================================================================
+
+class EntitySpan(BaseModel):
+    """Named entity recognized in textual content."""
+    text: str = Field(description="Extracted entity surface text")
+    label: str = Field(description="Model entity label (e.g. PERSON, ORG, GPE, DATE)")
+    normalized_label: str = Field(description="Standardized TruthLens entity category (PERSON, ORG, LOCATION, DATE, MONEY, QUANTITY, EVENT, GENERAL)")
+    start_char: int = Field(ge=0, description="Start character offset")
+    end_char: int = Field(ge=0, description="End character offset")
+
+
+class StructuredClaim(BaseModel):
+    """Structured semantic claim extracted via NLP claim decomposition."""
+    claim_text: str = Field(description="Original surface claim text")
+    normalized_claim_text: str = Field(description="Canonical normalized claim representation")
+    claim_type: str = Field(default="FACTUAL_CLAIM", description="Classification (FACTUAL_CLAIM, OPINION, QUESTION, NON_CLAIM, UNCERTAIN)")
+    subject: Optional[str] = Field(default=None, description="Extracted nominal subject of the assertion")
+    action: Optional[str] = Field(default=None, description="Extracted verb predicate or action")
+    value: Optional[str] = Field(default=None, description="Extracted object, complement, or quantified value")
+    entity_type: str = Field(default="GENERAL", description="Dominant entity category (PERSON, ORG, LOCATION, DATE, MONEY, QUANTITY, EVENT, GENERAL)")
+    confidence_score: float = Field(ge=0.0, le=1.0, default=1.0, description="Claim classification and extraction confidence")
+    claim_hash: str = Field(description="Deterministic collision-resistant SHA-256 hash of canonical claim tuple")
+    sentence_index: int = Field(default=0, ge=0, description="Zero-based index of sentence within document")
+    start_char: int = Field(default=0, ge=0, description="Document start character offset")
+    end_char: int = Field(default=0, ge=0, description="Document end character offset")
+    entities: List[EntitySpan] = Field(default_factory=list, description="Entities contained within this claim")
+
+
+class ClaimAnalysisEvidence(BaseModel):
+    """NLP pipeline forensic metadata and execution details."""
+    model_name: str = Field(description="NLP model identifier (e.g. spaCy-en_core_web_sm)")
+    sentences_count: int = Field(ge=0, description="Total sentences segmented and evaluated")
+    claims_count: int = Field(ge=0, description="Total candidate claims extracted")
+    entities_count: int = Field(ge=0, description="Total named entities recognized")
+    duration_seconds: float = Field(ge=0.0, description="Processing wall-clock duration in seconds")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Supplementary forensic parameters and heuristics")
+
+
+class ClaimAnalysisRequest(BaseModel):
+    """Payload for text and claim analysis."""
+    text: str = Field(description="Raw text from OCR, speech transcript, or direct input")
+    source_type: str = Field(default="DIRECT_TEXT", description="Origin of text: OCR, TRANSCRIPT, COMBINED, or DIRECT_TEXT")
+    language: Optional[str] = Field(default="en", description="Expected language ISO code")
+
+
+class ClaimAnalysisResult(BaseModel):
+    """Complete structured response for Text & Claim Analysis (Module 11)."""
+    text: str = Field(description="Analyzed source text")
+    source_type: str = Field(default="DIRECT_TEXT", description="Source format (OCR, TRANSCRIPT, COMBINED, DIRECT_TEXT)")
+    sentences_count: int = Field(ge=0, description="Number of sentences processed")
+    claims_count: int = Field(ge=0, description="Number of structured claims extracted")
+    claims: List[StructuredClaim] = Field(default_factory=list, description="List of structured claims")
+    entities: List[EntitySpan] = Field(default_factory=list, description="All recognized named entities in the text")
+    evidence: ClaimAnalysisEvidence = Field(description="Forensic NLP execution evidence")
+    status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+    error_message: Optional[str] = Field(default=None, description="Error message if analysis failed")
+
+
 

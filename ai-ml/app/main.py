@@ -14,6 +14,7 @@ from .services.audio_pipeline import AudioAnalysisPipeline
 from .services.av_sync_pipeline import AvSyncAnalysisPipeline
 from .services.ocr_pipeline import OcrAnalysisPipeline
 from .services.transcript_pipeline import TranscriptPipeline
+from .services.claim_extractor import ClaimExtractor
 from .schemas import (
     HealthResponse,
     ImageAnalysisResult,
@@ -23,6 +24,8 @@ from .schemas import (
     AvSyncAnalysisResult,
     OcrAnalysisResult,
     TranscriptResult,
+    ClaimAnalysisRequest,
+    ClaimAnalysisResult,
 )
 import tempfile
 import os
@@ -38,10 +41,11 @@ audio_pipeline: AudioAnalysisPipeline | None = None
 av_sync_pipeline: AvSyncAnalysisPipeline | None = None
 ocr_pipeline: OcrAnalysisPipeline | None = None
 transcript_pipeline: TranscriptPipeline | None = None
+claim_extractor: ClaimExtractor | None = None
 
 
 def init_services():
-    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline, ocr_pipeline, transcript_pipeline
+    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline, ocr_pipeline, transcript_pipeline, claim_extractor
     if model_service is None:
         model_service = ModelInferenceService()
     if ela_generator is None:
@@ -62,6 +66,8 @@ def init_services():
         ocr_pipeline = OcrAnalysisPipeline()
     if transcript_pipeline is None:
         transcript_pipeline = TranscriptPipeline()
+    if claim_extractor is None:
+        claim_extractor = ClaimExtractor()
 
 
 
@@ -505,6 +511,43 @@ async def analyze_speech_to_text(
                 os.remove(temp_file_path)
             except OSError:
                 pass
+
+
+@app.post("/api/v1/analyze/claims", response_model=ClaimAnalysisResult)
+async def analyze_claims(request: ClaimAnalysisRequest):
+    """
+    Executes Text & Claim Analysis (Module 11):
+    1. Validates input text boundary conditions and character limits.
+    2. Runs spaCy Named Entity Recognition (NER) across standard categories.
+    3. Segments and classifies statements (FACTUAL_CLAIM, OPINION, QUESTION, NON_CLAIM, UNCERTAIN).
+    4. Decomposes claims into semantic Subject, Action, and Value components.
+    5. Computes canonical normalized representation and collision-resistant SHA-256 claim hash.
+    6. Returns structured ClaimAnalysisResult JSON.
+    """
+    init_services()
+    if request.text is None:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Text field cannot be null.")
+
+    if len(request.text) > settings.CLAIM_MAX_TEXT_LENGTH:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Input text length ({len(request.text)} chars) exceeds maximum allowed limit ({settings.CLAIM_MAX_TEXT_LENGTH} chars)."
+        )
+
+    try:
+        result = claim_extractor.analyze(
+            text=request.text,
+            source_type=request.source_type,
+            language=request.language,
+        )
+        return result
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Text & claim analysis pipeline failure: {str(e)}"
+        )
 
 
 if __name__ == "__main__":
