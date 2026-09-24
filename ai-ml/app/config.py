@@ -1,4 +1,5 @@
 import os
+from typing import List
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -40,6 +41,14 @@ class Settings(BaseSettings):
     AV_SYNC_STEP_SECONDS: float = 0.5  # Window hop duration
     AV_SYNC_MAX_OFFSET_MS: int = 500  # Max temporal offset search boundary (+/- 500ms)
     AV_SYNC_MAX_DURATION_SECONDS: int = 120  # Max AV sync analysis duration (2 minutes)
+
+    # Module 09 OCR Configuration
+    OCR_LANGUAGES: List[str] = ["en"]
+    OCR_MAX_IMAGE_DIMENSION: int = 2048  # Downscale dimension cap
+    OCR_CONFIDENCE_THRESHOLD: float = 0.20  # Minimum confidence threshold
+    OCR_VIDEO_SAMPLE_INTERVAL_SECONDS: float = 1.0  # Sample 1 frame per second for video OCR
+    OCR_VIDEO_MAX_FRAMES: int = 60  # Maximum video frames to process for OCR
+    TESSERACT_CMD_PATH: str = os.getenv("TRUTHLENS_TESSERACT_CMD_PATH", "")
 
     model_config = SettingsConfigDict(env_prefix="TRUTHLENS_AI_")
 

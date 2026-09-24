@@ -25,3 +25,9 @@ from .audio_envelope_correlator import AudioEnvelopeCorrelator, AudioEnvelopeRes
 from .syncnet_evaluator import SyncNetEvaluator, SyncNetDualModel, SyncNetVisualNet, SyncNetAudioNet
 from .av_sync_pipeline import AvSyncAnalysisPipeline
 
+# Module 09 OCR & Visual Text Extraction Services
+from .image_preprocessor import ImagePreprocessor, PreprocessedImage
+from .ocr_engine import OcrEngine
+from .video_ocr_pipeline import VideoOcrPipeline
+from .ocr_pipeline import OcrAnalysisPipeline
+

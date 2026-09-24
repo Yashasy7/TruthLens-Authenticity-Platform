@@ -12,6 +12,7 @@ from .services.local_manipulation import LocalManipulationDetector
 from .services.video_pipeline import VideoAnalysisPipeline
 from .services.audio_pipeline import AudioAnalysisPipeline
 from .services.av_sync_pipeline import AvSyncAnalysisPipeline
+from .services.ocr_pipeline import OcrAnalysisPipeline
 from .schemas import (
     HealthResponse,
     ImageAnalysisResult,
@@ -19,6 +20,7 @@ from .schemas import (
     VideoAnalysisResult,
     AudioAnalysisResult,
     AvSyncAnalysisResult,
+    OcrAnalysisResult,
 )
 import tempfile
 import os
@@ -32,10 +34,11 @@ manipulation_detector: LocalManipulationDetector | None = None
 video_pipeline: VideoAnalysisPipeline | None = None
 audio_pipeline: AudioAnalysisPipeline | None = None
 av_sync_pipeline: AvSyncAnalysisPipeline | None = None
+ocr_pipeline: OcrAnalysisPipeline | None = None
 
 
 def init_services():
-    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline
+    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline, ocr_pipeline
     if model_service is None:
         model_service = ModelInferenceService()
     if ela_generator is None:
@@ -52,6 +55,8 @@ def init_services():
         audio_pipeline = AudioAnalysisPipeline()
     if av_sync_pipeline is None:
         av_sync_pipeline = AvSyncAnalysisPipeline()
+    if ocr_pipeline is None:
+        ocr_pipeline = OcrAnalysisPipeline()
 
 
 @asynccontextmanager
@@ -62,8 +67,8 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="TruthLens AI/ML Service",
-    description="Multi-Modal Image, Video, Audio & AV Synchronization Authenticity Forensics (Modules 05, 06, 07, 08)",
-    version="0.4.0",
+    description="Multi-Modal Image, Video, Audio, AV Sync & OCR Text Extraction Authenticity Forensics (Modules 05, 06, 07, 08, 09)",
+    version="0.5.0",
     lifespan=lifespan
 )
 
@@ -355,6 +360,73 @@ async def analyze_av_sync(file: UploadFile = File(...)):
         if os.path.exists(temp_video_path):
             try:
                 os.remove(temp_video_path)
+            except OSError:
+                pass
+
+
+@app.post("/api/v1/analyze/ocr", response_model=OcrAnalysisResult)
+async def analyze_ocr(file: UploadFile = File(...)):
+    """
+    Executes Optical Character Recognition & Visual Text Extraction (Module 09):
+    1. Binarization & contrast preprocessing (CLAHE, bilateral denoising, deskewing)
+    2. Multi-backend OCR inference (EasyOCR, Tesseract, morphological fallback)
+    3. Spatial bounding box and polygon coordinate extraction
+    4. Temporal tracking & deduplication across video keyframes
+    5. Aggregated text strings, confidence scores, and explainable evidence
+    """
+    init_services()
+    if file.content_type and not (
+        file.content_type.startswith("image/")
+        or file.content_type.startswith("video/")
+        or file.content_type in ["application/octet-stream"]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported media content type: '{file.content_type}'. Must be an image or video format."
+        )
+
+    # Determine extension
+    suffix = ".png"
+    if file.filename and "." in file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in [".jpg", ".jpeg", ".png", ".webp", ".bmp", ".tiff", ".mp4", ".mov", ".avi", ".webm", ".mkv"]:
+            suffix = ext
+
+    fd, temp_file_path = tempfile.mkstemp(prefix="truthlens_ocr_upload_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        total_bytes = 0
+        with open(temp_file_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > settings.MAX_VIDEO_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Uploaded media exceeds maximum allowed size ({settings.MAX_VIDEO_SIZE_BYTES} bytes)."
+                    )
+                out_file.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded media file is empty.")
+
+        # Ingest into OCR pipeline
+        result = ocr_pipeline.analyze(temp_file_path)
+        return result
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"OCR analysis pipeline failure: {str(e)}"
+        )
+    finally:
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
             except OSError:
                 pass
 

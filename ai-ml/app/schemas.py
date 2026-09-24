@@ -1,4 +1,4 @@
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 
 
@@ -162,5 +162,62 @@ class AvSyncAnalysisResult(BaseModel):
     model_version: str = Field(description="Model weights checkpoint identifier")
     evidence: AvSyncEvidence = Field(description="Comprehensive explainable forensic evidence")
     status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+
+
+# =============================================================================
+# Module 09: OCR & Visual Text Extraction Schemas
+# =============================================================================
+
+class OcrBoundingBox(BaseModel):
+    """Spatial bounding box and polygon coordinates for an extracted text region."""
+    x: int = Field(description="Bounding box top-left X coordinate in pixels")
+    y: int = Field(description="Bounding box top-left Y coordinate in pixels")
+    width: int = Field(description="Bounding box width in pixels")
+    height: int = Field(description="Bounding box height in pixels")
+    normalized_bbox: List[float] = Field(
+        default_factory=list,
+        description="Normalized coordinates [x, y, width, height] in range 0.0 to 1.0"
+    )
+    polygon: List[List[int]] = Field(
+        default_factory=list,
+        description="Quad polygon corners [[x1, y1], [x2, y2], [x3, y3], [x4, y4]]"
+    )
+
+
+class OcrTextRegion(BaseModel):
+    """Represents an extracted text span with spatial, confidence, and optional temporal metadata."""
+    text: str = Field(description="Extracted text string")
+    confidence: float = Field(ge=0.0, le=1.0, description="OCR recognition confidence (0.0 to 1.0)")
+    bounding_box: OcrBoundingBox = Field(description="Spatial bounding box location")
+    language: str = Field(default="en", description="Detected language code (e.g. 'en')")
+    frame_index: Optional[int] = Field(default=None, description="Frame index for video OCR")
+    timestamp_seconds: Optional[float] = Field(default=None, description="Keyframe timestamp in seconds")
+    start_time: Optional[float] = Field(default=None, description="Start timestamp for continuous video chyron")
+    end_time: Optional[float] = Field(default=None, description="End timestamp for continuous video chyron")
+
+
+class OcrEvidence(BaseModel):
+    """Detailed forensic evidence, preprocessing metadata, and extraction parameters."""
+    total_regions: int = Field(description="Count of distinct text regions identified")
+    detected_languages: List[str] = Field(default_factory=list, description="Unique languages detected in visual text")
+    image_width: int = Field(description="Processed image or frame width")
+    image_height: int = Field(description="Processed image or frame height")
+    engine_used: str = Field(description="OCR engine implementation (EasyOCR, Tesseract, or OpenCV-Morphological-OCR)")
+    preprocessing_applied: List[str] = Field(default_factory=list, description="Applied visual preprocessing steps")
+    media_type: str = Field(default="IMAGE", description="Analyzed media type (IMAGE or VIDEO)")
+    frames_analyzed: int = Field(default=1, description="Number of visual frames analyzed")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Supplementary diagnostic and performance metrics")
+
+
+class OcrAnalysisResult(BaseModel):
+    """Overall result of OCR Visual Text Extraction (Module 09)."""
+    extracted_text: str = Field(description="Complete concatenated extracted text")
+    language: str = Field(default="en", description="Primary detected language code")
+    confidence_score: float = Field(ge=0.0, le=1.0, description="Average OCR confidence across all text regions")
+    regions_count: int = Field(description="Total count of text regions")
+    regions: List[OcrTextRegion] = Field(default_factory=list, description="Extracted text regions with coordinates")
+    evidence: OcrEvidence = Field(description="Explainable preprocessing and extraction evidence")
+    status: str = Field(default="COMPLETED", description="Analysis execution state (COMPLETED, FAILED)")
+    error_message: Optional[str] = Field(default=None, description="Error message if analysis failed")
 
 
