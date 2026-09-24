@@ -1,0 +1,272 @@
+{
+  "text": "On Monday, President Emmanuel Macron announced a 15 billion euro climate package in Paris. The European Union approved the funding following three weeks of negotiations. I believe this is the most visionary environmental policy in European history! Will other member states follow France's lead before the December summit? Microsoft committed $500 million to clean energy projects across Germany.",
+  "source_type": "TRANSCRIPT",
+  "sentences_count": 5,
+  "claims_count": 5,
+  "claims": [
+    {
+      "claim_text": "On Monday, President Emmanuel Macron announced a 15 billion euro climate package in Paris.",
+      "normalized_claim_text": "On Monday, President Emmanuel Macron announced a 15 billion euro climate package in Paris.",
+      "claim_type": "FACTUAL_CLAIM",
+      "subject": "President Emmanuel Macron",
+      "action": "announced",
+      "value": "Monday",
+      "entity_type": "DATE",
+      "confidence_score": 0.99,
+      "claim_hash": "e116c7de3b490e5437a3b77b1c7f9f8a2ce8d77df1f5c26929249ee401434d69",
+      "sentence_index": 0,
+      "start_char": 0,
+      "end_char": 90,
+      "entities": [
+        {
+          "text": "Monday",
+          "label": "DATE",
+          "normalized_label": "DATE",
+          "start_char": 3,
+          "end_char": 9
+        },
+        {
+          "text": "Emmanuel Macron",
+          "label": "PERSON",
+          "normalized_label": "PERSON",
+          "start_char": 21,
+          "end_char": 36
+        },
+        {
+          "text": "15 billion",
+          "label": "MONEY",
+          "normalized_label": "MONEY",
+          "start_char": 49,
+          "end_char": 59
+        },
+        {
+          "text": "Paris",
+          "label": "GPE",
+          "normalized_label": "LOCATION",
+          "start_char": 84,
+          "end_char": 89
+        }
+      ]
+    },
+    {
+      "claim_text": "The European Union approved the funding following three weeks of negotiations.",
+      "normalized_claim_text": "The European Union approved the funding following three weeks of negotiations.",
+      "claim_type": "FACTUAL_CLAIM",
+      "subject": "The European Union",
+      "action": "approved",
+      "value": "the funding",
+      "entity_type": "ORG",
+      "confidence_score": 0.95,
+      "claim_hash": "b43903b7d5f35c7a9e6940b1ee2ab0b85089e4a312f98bf3ed0a3805249fc5eb",
+      "sentence_index": 1,
+      "start_char": 91,
+      "end_char": 169,
+      "entities": [
+        {
+          "text": "The European Union",
+          "label": "ORG",
+          "normalized_label": "ORG",
+          "start_char": 91,
+          "end_char": 109
+        },
+        {
+          "text": "three weeks",
+          "label": "DATE",
+          "normalized_label": "DATE",
+          "start_char": 141,
+          "end_char": 152
+        }
+      ]
+    },
+    {
+      "claim_text": "I believe this is the most visionary environmental policy in European history!",
+      "normalized_claim_text": "I believe this is the most visionary environmental policy in European history!",
+      "claim_type": "OPINION",
+      "subject": "I",
+      "action": "believe",
+      "value": "the most visionary environmental policy in European history",
+      "entity_type": "ORG",
+      "confidence_score": 0.88,
+      "claim_hash": "10e181562e95d4bb944073e86c7b51ce24461511ef4d31015b6c8bcd8e8b4268",
+      "sentence_index": 2,
+      "start_char": 170,
+      "end_char": 248,
+      "entities": [
+        {
+          "text": "European",
+          "label": "NORP",
+          "normalized_label": "ORG",
+          "start_char": 231,
+          "end_char": 239
+        }
+      ]
+    },
+    {
+      "claim_text": "Will other member states follow France's lead before the December summit?",
+      "normalized_claim_text": "Will other member states follow France's lead before the December summit?",
+      "claim_type": "QUESTION",
+      "subject": "other member states",
+      "action": "Will follow",
+      "value": "France 's lead",
+      "entity_type": "LOCATION",
+      "confidence_score": 0.95,
+      "claim_hash": "e42f42f32db37cf47d691213fb2611ef592eb61ee27074180e964c0c107d4578",
+      "sentence_index": 3,
+      "start_char": 249,
+      "end_char": 322,
+      "entities": [
+        {
+          "text": "France",
+          "label": "GPE",
+          "normalized_label": "LOCATION",
+          "start_char": 281,
+          "end_char": 287
+        },
+        {
+          "text": "December",
+          "label": "DATE",
+          "normalized_label": "DATE",
+          "start_char": 306,
+          "end_char": 314
+        }
+      ]
+    },
+    {
+      "claim_text": "Microsoft committed $500 million to clean energy projects across Germany.",
+      "normalized_claim_text": "Microsoft committed $500 million to clean energy projects across Germany.",
+      "claim_type": "FACTUAL_CLAIM",
+      "subject": "Microsoft",
+      "action": "committed",
+      "value": "$ 500 million",
+      "entity_type": "ORG",
+      "confidence_score": 0.95,
+      "claim_hash": "c886ee250328304c63e328a3f64d74fa8978fe8dd14065071bc4e983032b0752",
+      "sentence_index": 4,
+      "start_char": 323,
+      "end_char": 396,
+      "entities": [
+        {
+          "text": "Microsoft",
+          "label": "ORG",
+          "normalized_label": "ORG",
+          "start_char": 323,
+          "end_char": 332
+        },
+        {
+          "text": "$500 million",
+          "label": "MONEY",
+          "normalized_label": "MONEY",
+          "start_char": 343,
+          "end_char": 355
+        },
+        {
+          "text": "Germany",
+          "label": "GPE",
+          "normalized_label": "LOCATION",
+          "start_char": 388,
+          "end_char": 395
+        }
+      ]
+    }
+  ],
+  "entities": [
+    {
+      "text": "Monday",
+      "label": "DATE",
+      "normalized_label": "DATE",
+      "start_char": 3,
+      "end_char": 9
+    },
+    {
+      "text": "Emmanuel Macron",
+      "label": "PERSON",
+      "normalized_label": "PERSON",
+      "start_char": 21,
+      "end_char": 36
+    },
+    {
+      "text": "15 billion",
+      "label": "MONEY",
+      "normalized_label": "MONEY",
+      "start_char": 49,
+      "end_char": 59
+    },
+    {
+      "text": "Paris",
+      "label": "GPE",
+      "normalized_label": "LOCATION",
+      "start_char": 84,
+      "end_char": 89
+    },
+    {
+      "text": "The European Union",
+      "label": "ORG",
+      "normalized_label": "ORG",
+      "start_char": 91,
+      "end_char": 109
+    },
+    {
+      "text": "three weeks",
+      "label": "DATE",
+      "normalized_label": "DATE",
+      "start_char": 141,
+      "end_char": 152
+    },
+    {
+      "text": "European",
+      "label": "NORP",
+      "normalized_label": "ORG",
+      "start_char": 231,
+      "end_char": 239
+    },
+    {
+      "text": "France",
+      "label": "GPE",
+      "normalized_label": "LOCATION",
+      "start_char": 281,
+      "end_char": 287
+    },
+    {
+      "text": "December",
+      "label": "DATE",
+      "normalized_label": "DATE",
+      "start_char": 306,
+      "end_char": 314
+    },
+    {
+      "text": "Microsoft",
+      "label": "ORG",
+      "normalized_label": "ORG",
+      "start_char": 323,
+      "end_char": 332
+    },
+    {
+      "text": "$500 million",
+      "label": "MONEY",
+      "normalized_label": "MONEY",
+      "start_char": 343,
+      "end_char": 355
+    },
+    {
+      "text": "Germany",
+      "label": "GPE",
+      "normalized_label": "LOCATION",
+      "start_char": 388,
+      "end_char": 395
+    }
+  ],
+  "evidence": {
+    "model_name": "spaCy-en_core_web_sm",
+    "sentences_count": 5,
+    "claims_count": 5,
+    "entities_count": 12,
+    "duration_seconds": 0.0526,
+    "details": {
+      "source_type": "TRANSCRIPT",
+      "language": "en",
+      "max_sentences_applied": false
+    }
+  },
+  "status": "COMPLETED",
+  "error_message": null
+}
