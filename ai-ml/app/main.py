@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, File, UploadFile, HTTPException, status
+from fastapi import FastAPI, File, UploadFile, HTTPException, status, Form
 from fastapi.responses import JSONResponse
 from .config import settings
 from .schemas import HealthResponse, ImageAnalysisResult, ImageAnalysisEvidence
@@ -13,6 +13,7 @@ from .services.video_pipeline import VideoAnalysisPipeline
 from .services.audio_pipeline import AudioAnalysisPipeline
 from .services.av_sync_pipeline import AvSyncAnalysisPipeline
 from .services.ocr_pipeline import OcrAnalysisPipeline
+from .services.transcript_pipeline import TranscriptPipeline
 from .schemas import (
     HealthResponse,
     ImageAnalysisResult,
@@ -21,6 +22,7 @@ from .schemas import (
     AudioAnalysisResult,
     AvSyncAnalysisResult,
     OcrAnalysisResult,
+    TranscriptResult,
 )
 import tempfile
 import os
@@ -35,10 +37,11 @@ video_pipeline: VideoAnalysisPipeline | None = None
 audio_pipeline: AudioAnalysisPipeline | None = None
 av_sync_pipeline: AvSyncAnalysisPipeline | None = None
 ocr_pipeline: OcrAnalysisPipeline | None = None
+transcript_pipeline: TranscriptPipeline | None = None
 
 
 def init_services():
-    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline, ocr_pipeline
+    global model_service, ela_generator, noise_analyzer, frequency_analyzer, manipulation_detector, video_pipeline, audio_pipeline, av_sync_pipeline, ocr_pipeline, transcript_pipeline
     if model_service is None:
         model_service = ModelInferenceService()
     if ela_generator is None:
@@ -57,6 +60,9 @@ def init_services():
         av_sync_pipeline = AvSyncAnalysisPipeline()
     if ocr_pipeline is None:
         ocr_pipeline = OcrAnalysisPipeline()
+    if transcript_pipeline is None:
+        transcript_pipeline = TranscriptPipeline()
+
 
 
 @asynccontextmanager
@@ -431,7 +437,78 @@ async def analyze_ocr(file: UploadFile = File(...)):
                 pass
 
 
+@app.post("/api/v1/analyze/speech-to-text", response_model=TranscriptResult)
+async def analyze_speech_to_text(
+    file: UploadFile = File(...),
+    language: str | None = Form(None),
+):
+    """
+    Executes Automated Speech Recognition & Transcript Extraction (Module 10):
+    1. Demuxes/standardizes input audio/video into 16kHz mono PCM WAV.
+    2. Enforces duration boundaries and detects silent speech tracks.
+    3. Runs Faster-Whisper ASR inference with language and word-level timestamps.
+    4. Computes normalized segment confidence scores.
+    5. Returns structured TranscriptResult JSON.
+    """
+    init_services()
+    if file.content_type and not (
+        file.content_type.startswith("audio/")
+        or file.content_type.startswith("video/")
+        or file.content_type in ["application/octet-stream"]
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Unsupported media content type: '{file.content_type}'. Must be an audio or video format."
+        )
+
+    # Determine extension
+    suffix = ".wav"
+    if file.filename and "." in file.filename:
+        ext = os.path.splitext(file.filename)[1].lower()
+        if ext in [".wav", ".mp3", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".mp4", ".mov", ".avi", ".webm", ".mkv"]:
+            suffix = ext
+
+    fd, temp_file_path = tempfile.mkstemp(prefix="truthlens_stt_upload_", suffix=suffix)
+    os.close(fd)
+
+    try:
+        total_bytes = 0
+        with open(temp_file_path, "wb") as out_file:
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                total_bytes += len(chunk)
+                if total_bytes > settings.MAX_VIDEO_SIZE_BYTES:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail=f"Uploaded media exceeds maximum allowed size ({settings.MAX_VIDEO_SIZE_BYTES} bytes)."
+                    )
+                out_file.write(chunk)
+
+        if total_bytes == 0:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded media file is empty.")
+
+        # Ingest into STT pipeline
+        result = transcript_pipeline.analyze(temp_file_path, language=language)
+        return result
+
+    except HTTPException:
+        raise
+    except ValueError as ve:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(ve))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Speech-to-text pipeline failure: {str(e)}"
+        )
+    finally:
+        if os.path.exists(temp_file_path):
+            try:
+                os.remove(temp_file_path)
+            except OSError:
+                pass
+
+
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("ai-ml.app.main:app", host=settings.HOST, port=settings.PORT, reload=False)
+
 

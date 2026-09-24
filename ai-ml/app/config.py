@@ -50,6 +50,14 @@ class Settings(BaseSettings):
     OCR_VIDEO_MAX_FRAMES: int = 60  # Maximum video frames to process for OCR
     TESSERACT_CMD_PATH: str = os.getenv("TRUTHLENS_TESSERACT_CMD_PATH", "")
 
+    # Module 10 Speech-to-Text Configuration
+    WHISPER_MODEL_SIZE: str = os.getenv("TRUTHLENS_WHISPER_MODEL_SIZE", "tiny")
+    WHISPER_DEVICE: str = "cuda" if os.getenv("TRUTHLENS_USE_CUDA", "false").lower() == "true" else "cpu"
+    WHISPER_COMPUTE_TYPE: str = os.getenv("TRUTHLENS_WHISPER_COMPUTE_TYPE", "int8")
+    WHISPER_BEAM_SIZE: int = 5
+    WHISPER_MAX_DURATION_SECONDS: int = 600  # 10 minutes maximum speech duration
+    WHISPER_DOWNLOAD_ROOT: str = os.getenv("TRUTHLENS_WHISPER_DOWNLOAD_ROOT", "")
+
     model_config = SettingsConfigDict(env_prefix="TRUTHLENS_AI_")
 
 

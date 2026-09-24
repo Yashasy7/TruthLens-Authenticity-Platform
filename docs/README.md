@@ -55,7 +55,7 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 | **Module 07** | **Audio Authenticity & Voice Forensics** | Vishal | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Dual-engine audio authenticity analysis: Librosa 80-band Mel-spectrogram extractor, YIN F0 pitch variance, STFT phase discontinuity, spectral statistics, onset spectral flux splicing markers, PyTorch AASIST GAT classifier net, Mel-spectrogram PNG/Base64 generator, Flyway V7, 35 tests (6 Python + 29 Java) |
 | **Module 08** | **Audio-Video Synchronization Analysis** | Vishal + Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Multi-modal AV sync analysis: MediaPipe lip tracker, acoustic speech envelope cross-correlation, PyTorch SyncNet two-stream evaluator, mismatch segment detection, Flyway V8, 38 tests (15 Python + 23 Java) |
 | **Module 09** | **OCR & Visual Text Extraction** | Yashas | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Visual text extraction: image preprocessing (CLAHE, bilateral denoise, deskew, binarize), multi-engine OCR (EasyOCR / Tesseract / OpenCV morphological), video keyframe sampling & temporal chyron deduplication, Flyway V9, 37 tests (12 Python + 25 Java) |
-| **Module 10** | Speech-to-Text & Transcript Extraction | Vishal | *Planned* | - |
+| **Module 10** | **Speech-to-Text & Transcript Extraction** | Vishal | **Implemented (Dual Engine: Python FastAPI + Spring Boot)** | Speech transcription & alignment: 16kHz mono WAV demuxing/resampling via FFmpeg, silence & duration validation, Faster-Whisper ASR engine (int8 CPU/CUDA), word-level alignment & confidence scoring, Flyway V10, 36 tests (11 Python + 25 Java) |
 | **Module 11** | Text & Claim Analysis | Vishal + Yashas | *Planned* | - |
 | **Module 12** | Claim Verification & Evidence Retrieval | Yashas + Member | *Planned* | - |
 | **Module 13** | Provenance & Content Credentials (C2PA) | Yashas + Vishal | *Planned* | - |
@@ -81,9 +81,12 @@ TruthLens follows a modular 20-module build roadmap. The table below provides an
 - [Module 07: Audio Authenticity & Voice Forensics](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-07-audio-authenticity-voice-forensics.md)
 - [Module 08: Audio-Video Synchronization Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-08-audio-video-synchronization.md)
 - [Module 09: OCR & Visual Text Extraction](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-09-ocr-text-extraction.md)
+- [Module 10: Speech-to-Text & Transcript Extraction](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/modules/module-10-speech-to-text.md)
 - [REST API: AV Synchronization Analysis](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/av-sync-api.md)
 - [REST API: OCR Text Extraction](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/ocr-api.md)
+- [REST API: Speech-to-Text Transcript](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/api/transcript-api.md)
 - [Database Schema: AV Sync Analysis V8](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-08.md)
 - [Database Schema: OCR Text Extraction V9](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-09.md)
+- [Database Schema: Speech-to-Text Transcript V10](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/database/schema-module-10.md)
 - [Developer Setup Guide](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/development/setup-guide.md)
 - [Testing Strategy & Test Suite](file:///c:/Users/Yashas%20H%20L/IdeaProjects/TruthLens/TruthLens-Authenticity-Platform/docs/testing/test-strategy-and-suite.md)

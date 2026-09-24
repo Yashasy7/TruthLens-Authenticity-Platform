@@ -31,3 +31,9 @@ from .ocr_engine import OcrEngine
 from .video_ocr_pipeline import VideoOcrPipeline
 from .ocr_pipeline import OcrAnalysisPipeline
 
+# Module 10 Speech-to-Text & Transcript Extraction Services
+from .speech_preprocessor import SpeechPreprocessor, PreprocessedAudio
+from .speech_transcriber import SpeechTranscriber
+from .transcript_pipeline import TranscriptPipeline
+
+

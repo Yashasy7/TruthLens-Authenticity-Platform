@@ -221,3 +221,60 @@ class OcrAnalysisResult(BaseModel):
     error_message: Optional[str] = Field(default=None, description="Error message if analysis failed")
 
 
+# =============================================================================
+# Module 10: Speech-to-Text & Transcript Extraction Schemas
+# =============================================================================
+
+class TranscriptWord(BaseModel):
+    """Word-level timing offset and acoustic alignment confidence."""
+    word: str = Field(description="Spoken word token")
+    start: float = Field(ge=0.0, description="Word start timestamp in seconds")
+    end: float = Field(ge=0.0, description="Word end timestamp in seconds")
+    probability: float = Field(ge=0.0, le=1.0, default=1.0, description="Confidence score for this word")
+
+
+class TranscriptSegment(BaseModel):
+    """Timestamped segment with phrase text, alignment offsets, and acoustic metrics."""
+    id: int = Field(description="Sequential segment index")
+    seek: int = Field(default=0, description="Frame seek offset")
+    start: float = Field(ge=0.0, description="Segment start offset in seconds")
+    end: float = Field(ge=0.0, description="Segment end offset in seconds")
+    text: str = Field(description="Transcribed phrase or sentence")
+    tokens: List[int] = Field(default_factory=list, description="Token IDs")
+    temperature: float = Field(default=0.0, description="Decoding temperature")
+    avg_logprob: float = Field(default=0.0, description="Average log probability")
+    compression_ratio: float = Field(default=1.0, description="Text compression ratio")
+    no_speech_prob: float = Field(default=0.0, ge=0.0, le=1.0, description="Probability that the segment is non-speech")
+    confidence: float = Field(ge=0.0, le=1.0, default=1.0, description="Normalized segment confidence score (0.0 to 1.0)")
+    words: List[TranscriptWord] = Field(default_factory=list, description="Word-level timing offsets")
+
+
+class TranscriptEvidence(BaseModel):
+    """Forensic metadata, ASR model details, and acoustic extraction parameters."""
+    model_name: str = Field(description="ASR model architecture name")
+    model_size: str = Field(description="ASR model size (tiny, base, small, etc.)")
+    compute_type: str = Field(description="Quantization / compute type (int8, float16, float32)")
+    device: str = Field(description="Inference device (cpu, cuda)")
+    detected_language: str = Field(description="Auto-detected primary language code")
+    language_probability: float = Field(ge=0.0, le=1.0, description="Language classification probability")
+    duration_seconds: float = Field(ge=0.0, description="Total processed audio duration in seconds")
+    audio_sample_rate: int = Field(default=16000, description="Resampled audio sampling rate in Hz")
+    media_type: str = Field(default="AUDIO", description="Source media type (AUDIO or VIDEO)")
+    details: Dict[str, Any] = Field(default_factory=dict, description="Supplementary forensic and diagnostic metrics")
+
+
+class TranscriptResult(BaseModel):
+    """Complete structured speech-to-text transcript output (Module 10)."""
+    full_text: str = Field(description="Complete concatenated speech transcript")
+    language: str = Field(default="en", description="Primary detected language code")
+    confidence_score: float = Field(ge=0.0, le=1.0, description="Overall transcript confidence (0.0 to 1.0)")
+    duration_seconds: float = Field(ge=0.0, description="Total speech duration in seconds")
+    segments_count: int = Field(default=0, description="Count of timestamped segments")
+    words_count: int = Field(default=0, description="Total transcribed words count")
+    segments: List[TranscriptSegment] = Field(default_factory=list, description="Timestamped transcript segments")
+    evidence: TranscriptEvidence = Field(description="ASR model and acoustic evidence")
+    status: str = Field(default="COMPLETED", description="Transcription execution state (COMPLETED, FAILED)")
+    error_message: Optional[str] = Field(default=None, description="Error message if transcription failed")
+
+
+
