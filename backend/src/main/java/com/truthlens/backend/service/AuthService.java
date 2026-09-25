@@ -1,0 +1,296 @@
+package com.truthlens.backend.service;
+
+import com.truthlens.backend.dto.AuthResponse;
+import com.truthlens.backend.dto.LoginRequest;
+import com.truthlens.backend.dto.RegisterRequest;
+import com.truthlens.backend.entity.AccountStatus;
+import com.truthlens.backend.entity.RevokedToken;
+import com.truthlens.backend.entity.Role;
+import com.truthlens.backend.entity.RoleName;
+import com.truthlens.backend.entity.User;
+import com.truthlens.backend.exception.AccountSuspendedException;
+import com.truthlens.backend.exception.EmailAlreadyExistsException;
+import com.truthlens.backend.exception.InvalidCredentialsException;
+import com.truthlens.backend.exception.RoleNotFoundException;
+import com.truthlens.backend.exception.UserNotFoundException;
+import com.truthlens.backend.repository.RevokedTokenRepository;
+import com.truthlens.backend.repository.RoleRepository;
+import com.truthlens.backend.repository.UserRepository;
+import com.truthlens.backend.security.JwtService;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+/**
+ * Core authentication service for TruthLens — Stage 5 & 8.
+ *
+ * <p>Handles user registration, login, and secure logout/token revocation. Responsibilities:</p>
+ * <ul>
+ *   <li>Email normalisation (trim + lowercase) applied consistently to registration and login.</li>
+ *   <li>BCrypt password hashing on registration via {@link PasswordEncoder}.</li>
+ *   <li>Duplicate email detection before persistence.</li>
+ *   <li>USER role assignment from database seed data on registration.</li>
+ *   <li>Credential verification and account status check on login.</li>
+ *   <li>Signed JWT token generation upon successful login via {@link JwtService}.</li>
+ *   <li>JWT revocation persistence on logout via {@link RevokedTokenRepository}.</li>
+ * </ul>
+ */
+@Service
+public class AuthService {
+
+    private static final Logger log = LoggerFactory.getLogger(AuthService.class);
+
+    private final UserRepository         userRepository;
+    private final RoleRepository         roleRepository;
+    private final RevokedTokenRepository revokedTokenRepository;
+    private final PasswordEncoder        passwordEncoder;
+    private final JwtService             jwtService;
+
+    // -------------------------------------------------------------------------
+    // Constructor injection — no field injection
+    // -------------------------------------------------------------------------
+
+    public AuthService(UserRepository userRepository,
+                       RoleRepository roleRepository,
+                       RevokedTokenRepository revokedTokenRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService) {
+        this.userRepository         = userRepository;
+        this.roleRepository         = roleRepository;
+        this.revokedTokenRepository = revokedTokenRepository;
+        this.passwordEncoder        = passwordEncoder;
+        this.jwtService             = jwtService;
+    }
+
+    // -------------------------------------------------------------------------
+    // Registration
+    // -------------------------------------------------------------------------
+
+    /**
+     * Registers a new user account.
+     *
+     * <p>Registration flow:</p>
+     * <ol>
+     *   <li>Normalise email (trim + lowercase).</li>
+     *   <li>Check for duplicate email — throw {@link EmailAlreadyExistsException}
+     *       (HTTP 409) if taken.</li>
+     *   <li>Hash the supplied password with BCrypt.</li>
+     *   <li>Build a new {@link User} entity with status {@code ACTIVE}.</li>
+     *   <li>Load the {@code USER} role from the database seed — throw
+     *       {@link RoleNotFoundException} (HTTP 500) if missing.</li>
+     *   <li>Assign the {@code USER} role to the new account.</li>
+     *   <li>Persist and return a safe {@link AuthResponse}.</li>
+     * </ol>
+     *
+     * @param request the registration request DTO (pre-validated by the controller)
+     * @return a safe {@link AuthResponse} containing the new user's details
+     * @throws EmailAlreadyExistsException if the email is already registered
+     * @throws RoleNotFoundException       if the USER role is missing from the database
+     */
+    @Transactional
+    public AuthResponse register(RegisterRequest request) {
+
+        // Step 1 — Normalise email
+        String email = normaliseEmail(request.getEmail());
+
+        // Step 2 — Duplicate check
+        if (userRepository.existsByEmail(email)) {
+            throw new EmailAlreadyExistsException(email);
+        }
+
+        // Step 3 — Hash the password (BCrypt)
+        String passwordHash = passwordEncoder.encode(request.getPassword());
+
+        // Step 4 — Build User entity; set status to ACTIVE
+        String fullName = request.getFullName() != null
+                ? request.getFullName().strip()
+                : null;
+
+        User user = new User(email, passwordHash, fullName);
+        user.setStatus(AccountStatus.ACTIVE);
+
+        // Step 5 — Load the seeded USER role
+        Role userRole = roleRepository.findByName(RoleName.USER)
+                .orElseThrow(() -> new RoleNotFoundException(RoleName.USER.name()));
+
+        // Step 6 — Assign role (within transaction, roles set is initialised)
+        user.getRoles().add(userRole);
+
+        // Step 7 — Persist
+        User saved = userRepository.save(user);
+        log.info("Registered new user: id={}, email={}", saved.getId(), saved.getEmail());
+
+        return buildAuthResponse("Registration successful", saved);
+    }
+
+    // -------------------------------------------------------------------------
+    // Login
+    // -------------------------------------------------------------------------
+
+    /**
+     * Authenticates a user with email and password.
+     *
+     * <p>Login flow:</p>
+     * <ol>
+     *   <li>Normalise email (trim + lowercase).</li>
+     *   <li>Look up the user by email — throw {@link InvalidCredentialsException}
+     *       (HTTP 401) if not found (generic message to prevent user enumeration).</li>
+     *   <li>Verify the supplied password against the stored BCrypt hash — throw
+     *       {@link InvalidCredentialsException} (HTTP 401) on mismatch.</li>
+     *   <li>Check account status — throw {@link AccountSuspendedException}
+     *       (HTTP 403) if suspended.</li>
+     *   <li>Generate a signed JWT and return a safe {@link AuthResponse} containing the token.</li>
+     * </ol>
+     *
+     * @param request the login request DTO (pre-validated by the controller)
+     * @return a safe {@link AuthResponse} containing the authenticated user's details
+     * @throws InvalidCredentialsException if email is not found or password is wrong
+     * @throws AccountSuspendedException   if the account is suspended
+     */
+    @Transactional(readOnly = true)
+    public AuthResponse login(LoginRequest request) {
+
+        // Step 1 — Normalise email
+        String email = normaliseEmail(request.getEmail());
+
+        // Step 2 — Find user; generic error on miss (no enumeration)
+        User user = userRepository.findByEmail(email)
+                .orElseThrow(InvalidCredentialsException::new);
+
+        // Step 3 — Verify password
+        if (!passwordEncoder.matches(request.getPassword(), user.getPasswordHash())) {
+            throw new InvalidCredentialsException();
+        }
+
+        // Step 4 — Check account status
+        if (user.getStatus() == AccountStatus.SUSPENDED) {
+            throw new AccountSuspendedException();
+        }
+
+        log.info("Successful login: id={}, email={}", user.getId(), user.getEmail());
+
+        // Step 5 — Generate signed JWT token
+        String token = jwtService.generateToken(user);
+
+        // Step 6 — Return safe response containing JWT
+        return buildAuthResponse("Login successful", user, token, "Bearer");
+    }
+
+    // -------------------------------------------------------------------------
+    // Logout / Token Revocation
+    // -------------------------------------------------------------------------
+
+    /**
+     * Revokes the authenticated user's current JWT access token.
+     *
+     * <p>Revocation flow:</p>
+     * <ol>
+     *   <li>Extract JTI and expiration timestamp from the token.</li>
+     *   <li>Find authenticated user by normalized email (throw {@link UserNotFoundException} if missing).</li>
+     *   <li>Check idempotency: if JTI is already recorded as revoked, return safely.</li>
+     *   <li>Create and persist a {@link RevokedToken} entity with reason {@code "LOGOUT"}.</li>
+     * </ol>
+     *
+     * @param token the raw JWT string extracted from the Bearer header
+     * @param email the authenticated user's email
+     * @throws UserNotFoundException if the user does not exist in the database
+     */
+    @Transactional
+    public void logout(String token, String email) {
+        String jti = jwtService.extractJti(token);
+        if (jti == null || jti.isBlank()) {
+            log.warn("Attempted logout with token lacking JTI");
+            throw new InvalidCredentialsException("Invalid token: missing token identifier");
+        }
+
+        String normalisedEmail = normaliseEmail(email);
+        User user = userRepository.findByEmail(normalisedEmail)
+                .orElseThrow(() -> new UserNotFoundException("User not found with email: " + normalisedEmail));
+
+        if (revokedTokenRepository.existsByTokenIdentifier(jti)) {
+            log.debug("JWT is already revoked; skipping duplicate persistence");
+            return;
+        }
+
+        OffsetDateTime expiresAt = jwtService.extractExpiration(token);
+        if (expiresAt == null) {
+            log.warn("Attempted logout with token lacking expiration");
+            throw new InvalidCredentialsException("Invalid token: missing expiration");
+        }
+
+        RevokedToken revokedToken = new RevokedToken(
+                jti,
+                user,
+                expiresAt,
+                OffsetDateTime.now(ZoneOffset.UTC),
+                "LOGOUT"
+        );
+
+        revokedTokenRepository.save(revokedToken);
+        log.info("Successfully revoked JWT token for user: id={}", user.getId());
+    }
+
+    // -------------------------------------------------------------------------
+    // Private helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Normalises an email address for consistent storage and lookup.
+     *
+     * <p>Applies: strip leading/trailing whitespace, then convert to lowercase.
+     * This ensures that {@code "  User@Example.COM  "} and {@code "user@example.com"}
+     * resolve to the same account.</p>
+     *
+     * @param raw the raw email string from the request
+     * @return the normalised email string
+     */
+    private String normaliseEmail(String raw) {
+        return raw == null ? null : raw.strip().toLowerCase();
+    }
+
+    /**
+     * Builds a safe {@link AuthResponse} from a persisted {@link User} without a JWT
+     * (used by registration).
+     */
+    private AuthResponse buildAuthResponse(String message, User user) {
+        return buildAuthResponse(message, user, null, null);
+    }
+
+    /**
+     * Builds a safe {@link AuthResponse} from a persisted {@link User} with a JWT
+     * (used by login).
+     *
+     * <p>The roles set is accessed here — callers must ensure this method is
+     * invoked within an active transaction (or with an already-initialised
+     * roles collection) to avoid a {@code LazyInitializationException}.</p>
+     *
+     * @param message   a short human-readable result message
+     * @param user      the user entity to map
+     * @param token     the signed JWT string (or null)
+     * @param tokenType the token type, e.g. "Bearer" (or null)
+     * @return the constructed {@link AuthResponse}
+     */
+    private AuthResponse buildAuthResponse(String message, User user, String token, String tokenType) {
+        Set<String> roleNames = user.getRoles().stream()
+                .map(role -> role.getName().name())
+                .collect(Collectors.toSet());
+
+        return new AuthResponse(
+                message,
+                token,
+                tokenType,
+                user.getId(),
+                user.getEmail(),
+                user.getFullName(),
+                user.getStatus().name(),
+                roleNames,
+                user.getCreatedAt());
+    }
+}
