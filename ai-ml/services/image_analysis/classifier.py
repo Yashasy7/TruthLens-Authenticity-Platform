@@ -73,20 +73,29 @@ def _build_model(backbone_name: str) -> nn.Module:
     return model
 
 
+_active_model_version: str = settings.model_version
+
+
+def get_model_metadata() -> Tuple[str, str]:
+    """Return (model_name, model_version) currently active in the service."""
+    return settings.model_name, _active_model_version
+
+
 def load_model(device: Optional[torch.device] = None) -> nn.Module:
     """
     Load (or return the cached) PyTorch classifier model.
 
-    If CLASSIFIER_CHECKPOINT is set in settings, loads fine-tuned weights.
-    Otherwise uses the pretrained ImageNet backbone with an untrained binary head.
+    If CLASSIFIER_CHECKPOINT is set, loads fine-tuned weights.
+    If REQUIRE_CHECKPOINT is True, strictly requires a valid checkpoint file.
+    Otherwise uses the pretrained ImageNet backbone with a development binary head.
 
     Args:
-        device: torch.device override. Defaults to CPU.
+        device: torch.device override. Defaults to CPU or CUDA if available.
 
     Returns:
         nn.Module in eval mode, registered as module-level singleton.
     """
-    global _model, _device
+    global _model, _device, _active_model_version
 
     if _model is not None:
         return _model
@@ -96,24 +105,45 @@ def load_model(device: Optional[torch.device] = None) -> nn.Module:
 
     model = _build_model(settings.classifier_backbone)
 
-    checkpoint_path = settings.classifier_checkpoint
+    checkpoint_path = settings.classifier_checkpoint.strip()
+    if settings.require_checkpoint and not checkpoint_path:
+        raise RuntimeError(
+            "Production mode requires CLASSIFIER_CHECKPOINT to be set. "
+            "Cannot run in production mode with untrained classification head."
+        )
+
     if checkpoint_path:
-        ckpt = Path(settings.model_dir) / checkpoint_path
-        if ckpt.exists():
-            state = torch.load(str(ckpt), map_location=_device)
-            model.load_state_dict(state, strict=False)
-            logger.info("Loaded fine-tuned weights from: %s", ckpt)
-        else:
-            logger.warning(
-                "CLASSIFIER_CHECKPOINT '%s' not found in MODEL_DIR. "
-                "Using pretrained ImageNet backbone with untrained binary head.",
-                checkpoint_path,
+        ckpt = Path(checkpoint_path)
+        if not ckpt.is_absolute():
+            ckpt = Path(settings.model_dir) / checkpoint_path
+
+        if not ckpt.exists():
+            raise FileNotFoundError(
+                f"Classifier checkpoint '{checkpoint_path}' not found at '{ckpt}'. "
+                "Ensure the trained weights file exists or update CLASSIFIER_CHECKPOINT."
             )
+
+        loaded = torch.load(str(ckpt), map_location=_device)
+        if isinstance(loaded, dict) and "model_state_dict" in loaded:
+            state = loaded["model_state_dict"]
+            if "model_version" in loaded:
+                _active_model_version = str(loaded["model_version"])
+        else:
+            state = loaded
+
+        model.load_state_dict(state, strict=False)
+        logger.info("Loaded fine-tuned weights from: %s (version: %s)", ckpt, _active_model_version)
+    else:
+        _active_model_version = f"{settings.model_version}-untrained"
+        logger.warning(
+            "No CLASSIFIER_CHECKPOINT configured. Running with untrained binary "
+            "classification head in development mode."
+        )
 
     model.to(_device)
     model.eval()
     _model = model
-    logger.info("Classifier ready.")
+    logger.info("Classifier ready. Active model: %s | version: %s", settings.model_name, _active_model_version)
     return _model
 
 
@@ -132,14 +162,17 @@ def predict_synthetic(
             confidence     — float [0.0, 1.0]  (distance from decision boundary 0.5)
     """
     model = load_model()
+    model.eval()
     tensor = image_tensor.to(_device)
 
     with torch.no_grad():
         output: torch.Tensor = model(tensor)         # (1, 1) after Sigmoid
 
     prob = float(output.squeeze().item())
-    # Confidence: how far from the uncertain midpoint 0.5
-    confidence = float(abs(prob - 0.5) * 2.0)
+    prob = float(max(0.0, min(1.0, prob)))
+
+    # Confidence: distance from decision boundary 0.5 scaled to [0.0, 1.0]
+    confidence = float(max(0.0, min(1.0, abs(prob - 0.5) * 2.0)))
 
     logger.debug("synthetic_prob=%.4f  confidence=%.4f", prob, confidence)
     return prob, confidence
@@ -147,5 +180,6 @@ def predict_synthetic(
 
 def reset_model() -> None:
     """Reset the module-level model singleton (useful for testing)."""
-    global _model
+    global _model, _active_model_version
     _model = None
+    _active_model_version = settings.model_version

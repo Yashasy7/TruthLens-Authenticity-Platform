@@ -7,10 +7,10 @@ Blueprint Section G: POST /api/image/analyze endpoint
 from __future__ import annotations
 
 from enum import Enum
-from typing import Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
 class AnalysisStatus(str, Enum):
@@ -106,3 +106,25 @@ class ImageAnalysisResponse(BaseModel):
         default=None,
         description="Human-readable error description populated only when status=FAILED.",
     )
+
+
+class BackendImageAnalysisResponse(BaseModel):
+    """
+    Response payload for POST /api/v1/analyze/image matching Yashas's Spring Boot
+    FastApiImageAnalysisResponse DTO contract exactly.
+    """
+    model_config = ConfigDict(protected_namespaces=())
+
+    ai_prob: float = Field(ge=0.0, le=1.0, description="Probability [0.0, 1.0] that image is AI-generated")
+    manipulation_prob: float = Field(ge=0.0, le=1.0, description="Probability [0.0, 1.0] of physical manipulation/splicing/copy-move")
+    noise_variance: Optional[float] = Field(default=None, ge=0.0, description="Laplacian noise variance")
+    fft_anomaly_score: Optional[float] = Field(default=None, ge=0.0, le=1.0, description="FFT frequency domain anomaly score")
+    copy_move_detected: bool = Field(default=False, description="Flag indicating detected copy-move cloning")
+    splicing_detected: bool = Field(default=False, description="Flag indicating detected image splicing")
+    model_name: str = Field(default="TruthLens-EfficientNet-B0", description="Name of the vision model")
+    model_version: str = Field(default="0.1.0-dev", description="Semantic version of the model weights")
+    ela_heatmap_base64: str = Field(description="Base64-encoded PNG string of ELA heatmap")
+    gradcam_heatmap_base64: Optional[str] = Field(default=None, description="Base64-encoded PNG string of Grad-CAM attention overlay")
+    evidence: Dict[str, Any] = Field(default_factory=dict, description="Structured forensic evidence and sub-metrics")
+    status: str = Field(default="COMPLETED", description="Job status, e.g. COMPLETED or FAILED")
+
