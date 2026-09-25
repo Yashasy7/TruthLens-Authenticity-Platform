@@ -30,10 +30,16 @@ export interface DuplicateMatchResponse {
 // -----------------------------------------------------------------------------
 
 export interface MetadataAnomalyDto {
-  tag: string;
-  anomalyType: string;
+  tag?: string;
+  ruleId?: string;
+  category?: string;
+  anomalyType?: string;
+  severity: 'INFO' | 'WARNING' | 'CRITICAL' | string;
+  title?: string;
   description: string;
-  severity: 'INFO' | 'WARNING' | 'CRITICAL';
+  evidence?: string;
+  confidence?: number;
+  scoreImpact?: number;
 }
 
 export interface MetadataResponse {
@@ -43,11 +49,28 @@ export interface MetadataResponse {
   cameraModel?: string | null;
   lensModel?: string | null;
   software?: string | null;
+  softwareTag?: string | null;
   dateTimeOriginal?: string | null;
+  capturedAt?: string | null;
+  modifiedAt?: string | null;
   gpsLatitude?: number | null;
   gpsLongitude?: number | null;
-  anomaliesCount: number;
+  gpsAltitude?: number | null;
+  width?: number | null;
+  height?: number | null;
+  durationSeconds?: number | null;
+  bitrate?: number | null;
+  frameRate?: number | null;
+  videoCodec?: string | null;
+  audioCodec?: string | null;
+  audioSampleRate?: number | null;
+  audioChannels?: number | null;
+  containerFormat?: string | null;
+  hasAnomalies?: boolean;
+  anomaliesCount?: number;
+  anomalyCount?: number;
   forensicScore: number;
+  riskLevel?: string | null;
   anomalies: MetadataAnomalyDto[];
   extractionEngine: string;
   createdAt: string;
@@ -99,11 +122,26 @@ export interface SuspiciousTimestampDto {
   reason?: string;
 }
 
+export interface VideoFrameScoreDto {
+  frame_index: number;
+  timestamp_seconds: number;
+  deepfake_score: number;
+  temporal_inconsistency?: number;
+  faces_detected?: number;
+  is_suspicious?: boolean;
+}
+
 export interface VideoEvidenceDto {
   frame_anomaly_scores?: number[];
+  frame_scores?: VideoFrameScoreDto[];
   face_detection_confidence?: number;
+  face_count?: number;
+  total_frames_sampled?: number;
+  duration_seconds?: number;
   optical_flow_inconsistency?: number;
   suspicious_intervals?: Array<{ start: number; end: number }>;
+  suspicious_timestamps?: SuspiciousTimestampDto[];
+  details?: Record<string, unknown>;
 }
 
 export interface VideoAnalysisResponse {
@@ -133,10 +171,16 @@ export interface AudioSpliceMarkerDto {
 
 export interface AudioEvidenceDto {
   spectral_centroid?: number;
+  spectral_centroid_mean?: number;
+  spectral_bandwidth_mean?: number;
+  spectral_rolloff_mean?: number;
   spectral_flatness?: number;
   zero_crossing_rate?: number;
+  zero_crossing_rate_mean?: number;
+  phase_discontinuity_score?: number;
   f0_mean_hz?: number;
   f0_std_hz?: number;
+  details?: Record<string, unknown>;
 }
 
 export interface AudioAnalysisResponse {
@@ -162,16 +206,21 @@ export interface AudioAnalysisResponse {
 // -----------------------------------------------------------------------------
 
 export interface MismatchSegmentDto {
-  start_seconds: number;
-  end_seconds: number;
-  drift_ms: number;
+  start_seconds?: number;
+  end_seconds?: number;
+  drift_ms?: number;
+  start_time?: number;
+  end_time?: number;
+  offset_ms?: number;
   confidence: number;
+  reason?: string;
 }
 
 export interface AvSyncEvidenceDto {
   envelope_correlation?: number;
   syncnet_distance?: number;
   face_track_coverage_pct?: number;
+  details?: Record<string, unknown>;
 }
 
 export interface AvSyncAnalysisResponse {
@@ -199,20 +248,32 @@ export interface OcrBoundingBoxDto {
   y: number;
   width: number;
   height: number;
+  polygon?: Array<[number, number] | { x: number; y: number }> | null;
+  normalized_bbox?: number[] | null;
 }
 
 export interface OcrTextRegionDto {
   text: string;
   confidence: number;
-  boundingBox: OcrBoundingBoxDto;
+  boundingBox?: OcrBoundingBoxDto;
+  bounding_box?: OcrBoundingBoxDto;
+  language?: string;
+  frame_index?: number | null;
+  timestamp_seconds?: number | null;
   polygon?: Array<{ x: number; y: number }> | null;
 }
 
 export interface OcrEvidenceDto {
   preprocessor?: string;
   ocr_engine?: string;
+  engine_used?: string;
   language_detected?: string;
+  detected_languages?: string[];
+  image_width?: number;
+  image_height?: number;
   line_count?: number;
+  total_regions?: number;
+  details?: Record<string, unknown>;
 }
 
 export interface OcrResultResponse {
@@ -235,17 +296,25 @@ export interface OcrResultResponse {
 
 export interface TranscriptWordDto {
   word: string;
-  start_seconds: number;
-  end_seconds: number;
-  confidence: number;
+  start?: number;
+  end?: number;
+  start_seconds?: number;
+  end_seconds?: number;
+  probability?: number;
+  confidence?: number;
 }
 
 export interface TranscriptSegmentDto {
-  segment_id: number;
-  start_seconds: number;
-  end_seconds: number;
+  id?: number;
+  segment_id?: number;
+  start?: number;
+  end?: number;
+  start_seconds?: number;
+  end_seconds?: number;
   text: string;
   confidence: number;
+  tokens?: number[];
+  temperature?: number;
   words?: TranscriptWordDto[] | null;
 }
 
@@ -253,6 +322,9 @@ export interface TranscriptEvidenceDto {
   duration_seconds?: number;
   silence_ratio?: number;
   engine?: string;
+  model_name?: string;
+  detected_language?: string;
+  details?: Record<string, unknown>;
 }
 
 export interface TranscriptResponse {

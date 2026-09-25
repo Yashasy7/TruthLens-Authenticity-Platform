@@ -237,12 +237,26 @@ export const forensicsApi = {
   getClaims: (mediaId: string): Promise<ClaimAnalysisResponse> =>
     request<ClaimAnalysisResponse>(`/api/media/${mediaId}/claims`),
 
-  reanalyzeClaims: (mediaId: string): Promise<ClaimAnalysisResponse> =>
-    request<ClaimAnalysisResponse>(`/api/media/${mediaId}/claims/analyze`, {
+  reanalyzeClaims: (mediaId: string, source?: string): Promise<ClaimAnalysisResponse> =>
+    request<ClaimAnalysisResponse>(`/api/media/${mediaId}/claims/analyze${source ? `?source=${source}` : ''}`, {
       method: 'POST',
     }),
 
   extractTextClaims: (
+    text: string,
+    sourceType: string = 'DIRECT_TEXT',
+    language: string = 'en',
+  ): Promise<ClaimAnalysisResponse> =>
+    request<ClaimAnalysisResponse>('/api/claims/extract', {
+      method: 'POST',
+      body: JSON.stringify({
+        text,
+        sourceType,
+        language,
+      }),
+    }),
+
+  extractDirectClaims: (
     text: string,
     sourceType: string = 'DIRECT_TEXT',
     language: string = 'en',

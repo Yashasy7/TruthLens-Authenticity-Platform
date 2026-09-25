@@ -139,6 +139,113 @@ test('TruthLens End-to-End System Integration Suite', async (t) => {
     assert.ok(elaBuffer.byteLength > 0, 'ELA PNG artifact must have non-zero bytes');
   });
 
+  await t.test('Workflow C: Audio Ingestion, Audio Authenticity (M07), and Speech-to-Text Transcript (M10)', async () => {
+    // 1. Upload real audio WAV
+    const sampleAudioPath = path.resolve('frontend/src/assets/sample_test_audio.wav');
+    assert.ok(fs.existsSync(sampleAudioPath), 'Sample test audio must exist');
+    const audioBytes = fs.readFileSync(sampleAudioPath);
+
+    const formData = new FormData();
+    const fileBlob = new Blob([audioBytes], { type: 'audio/wav' });
+    formData.append('file', fileBlob, 'sample_test_audio.wav');
+
+    const uploadRes = await fetch(`${BACKEND_URL}/media/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: formData,
+    });
+    const uploadText = await uploadRes.text();
+    assert.strictEqual(uploadRes.status, 201, `Audio upload should return 201 Created. Body: ${uploadText}`);
+    const uploadData = JSON.parse(uploadText);
+    assert.ok(uploadData.id, 'Audio upload must return media UUID');
+    assert.strictEqual(uploadData.mediaType, 'AUDIO');
+    const audioMediaId = uploadData.id;
+
+    // 2. Module 07: Audio Authenticity Analysis (AASIST model)
+    const audioRes = await fetch(`${BACKEND_URL}/media/${audioMediaId}/audio-analysis`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(audioRes.status, 200, 'Audio analysis endpoint should return 200 OK');
+    const audioData = await audioRes.json();
+    const voiceProb = audioData.syntheticVoiceProb ?? audioData.synthetic_voice_prob;
+    assert.ok(typeof voiceProb === 'number', 'Synthetic voice probability must be a number');
+
+    // 3. Audio Evidence & Splice Markers Endpoints
+    const evidenceRes = await fetch(`${BACKEND_URL}/media/${audioMediaId}/audio-analysis/evidence`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(evidenceRes.status, 200, 'Audio evidence endpoint should return 200 OK');
+    const evidenceData = await evidenceRes.json();
+    assert.ok(typeof (evidenceData.pitchVariance ?? evidenceData.pitch_variance) === 'number');
+
+    assert.ok(audioData.spectrogram_base64 || audioData.spectrogramBase64 || audioData.spectrogram_url || audioData.spectrogramUrl, 'Spectrogram artifact must be present in audio response');
+
+    // 4. Module 10: Speech-to-Text Transcript (Faster-Whisper)
+    const transcriptRes = await fetch(`${BACKEND_URL}/media/${audioMediaId}/transcript`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(transcriptRes.status, 200, 'Transcript endpoint should return 200 OK');
+    const transcriptData = await transcriptRes.json();
+    assert.ok(transcriptData.fullText !== undefined || transcriptData.full_text !== undefined, 'Transcript must contain full text property');
+  });
+
+  await t.test('Workflow D: Video Ingestion, Deepfake (M06), AV Sync (M08), OCR (M09), and Media Claims (M11)', async () => {
+    // 1. Upload real video MP4
+    const sampleVideoPath = path.resolve('frontend/src/assets/sample_test_video.mp4');
+    assert.ok(fs.existsSync(sampleVideoPath), 'Sample test video must exist');
+    const videoBytes = fs.readFileSync(sampleVideoPath);
+
+    const formData = new FormData();
+    const fileBlob = new Blob([videoBytes], { type: 'video/mp4' });
+    formData.append('file', fileBlob, 'sample_test_video.mp4');
+
+    const uploadRes = await fetch(`${BACKEND_URL}/media/upload`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${authToken}` },
+      body: formData,
+    });
+    const uploadText = await uploadRes.text();
+    assert.strictEqual(uploadRes.status, 201, `Video upload should return 201 Created. Body: ${uploadText}`);
+    const uploadData = JSON.parse(uploadText);
+    assert.ok(uploadData.id, 'Video upload must return media UUID');
+    assert.strictEqual(uploadData.mediaType, 'VIDEO');
+    const videoMediaId = uploadData.id;
+
+    // 2. Module 06: Video Deepfake Analysis
+    const videoRes = await fetch(`${BACKEND_URL}/media/${videoMediaId}/video-analysis`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(videoRes.status, 200, 'Video analysis endpoint should return 200 OK');
+    const videoData = await videoRes.json();
+    const deepfakeProb = videoData.deepfakeProb ?? videoData.deepfake_prob;
+    assert.ok(typeof deepfakeProb === 'number', 'Deepfake probability must be a number');
+
+    // 3. Module 08: Audio-Visual Synchronization
+    const avSyncRes = await fetch(`${BACKEND_URL}/media/${videoMediaId}/av-sync`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(avSyncRes.status, 200, 'AV Sync endpoint should return 200 OK');
+    const syncData = await avSyncRes.json();
+    const syncConfidence = syncData.confidence ?? syncData.syncScore ?? syncData.syncConfidence ?? syncData.sync_confidence;
+    assert.ok(typeof syncConfidence === 'number', 'Sync confidence must be a number');
+
+    // 4. Module 09: OCR Visual Text Extraction
+    const ocrRes = await fetch(`${BACKEND_URL}/media/${videoMediaId}/ocr`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(ocrRes.status, 200, 'OCR endpoint should return 200 OK');
+    const ocrData = await ocrRes.json();
+    assert.ok(ocrData.extractedText !== undefined || ocrData.textRegions !== undefined, 'OCR must return text or regions');
+
+    // 5. Module 11: Media Claims Extraction
+    const claimsRes = await fetch(`${BACKEND_URL}/media/${videoMediaId}/claims`, {
+      headers: { Authorization: `Bearer ${authToken}` },
+    });
+    assert.strictEqual(claimsRes.status, 200, 'Media claims endpoint should return 200 OK');
+    const claimsData = await claimsRes.json();
+    assert.ok(Array.isArray(claimsData.claims), 'Claims should be an array');
+  });
+
   await t.test('Workflow E: Claims & NLP Direct Text Extraction (Module 11)', async () => {
     const claimRequest = {
       text: 'Scientists at the World Health Organization confirmed a major discovery in renewable solar energy yesterday in Geneva.',
