@@ -17,10 +17,15 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, File, HTTPException, UploadFile, status
 
-from schemas.image_analysis import ImageAnalysisRequest, ImageAnalysisResponse, AnalysisStatus
-from services.image_analysis.service import analyze_image
+from schemas.image_analysis import (
+    AnalysisStatus,
+    BackendImageAnalysisResponse,
+    ImageAnalysisRequest,
+    ImageAnalysisResponse,
+)
+from services.image_analysis.service import analyze_image, analyze_image_bytes
 
 logger = logging.getLogger(__name__)
 
@@ -90,3 +95,71 @@ def analyze_image_endpoint(request: ImageAnalysisRequest) -> ImageAnalysisRespon
 def health_check() -> dict:
     """GET /api/image/health — Liveness probe for Module 05 service."""
     return {"service": "image-analysis", "status": "ok"}
+
+
+# ---------------------------------------------------------------------- #
+# Spring Boot Backend Contract Router (Blueprint Module 05 / Module 19)
+# Endpoint: POST /api/v1/analyze/image
+# ---------------------------------------------------------------------- #
+v1_router = APIRouter(
+    prefix="/api/v1",
+    tags=["Module 05 — Spring Boot Contract (/api/v1/analyze/image)"],
+)
+
+
+@v1_router.post(
+    "/analyze/image",
+    response_model=BackendImageAnalysisResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Analyze image authenticity (Spring Boot Backend Contract)",
+    description=(
+        "Consumes multipart/form-data containing binary 'file' field as invoked "
+        "by Spring Boot FastApiAiServiceClient. Returns AI probability, copy-move "
+        "and splicing flags, noise variance, FFT anomaly, and Base64-encoded heatmaps."
+    ),
+)
+async def analyze_image_v1_endpoint(
+    file: UploadFile = File(..., description="Uploaded image file to analyze"),
+) -> BackendImageAnalysisResponse:
+    """
+    POST /api/v1/analyze/image
+
+    Multipart handler reading binary image file and executing full Module 05 pipeline.
+    """
+    if not file:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File parameter is required.",
+        )
+
+    try:
+        content = await file.read()
+    except Exception as exc:
+        logger.error("Failed to read uploaded file: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Failed to read uploaded file: {exc}",
+        )
+
+    if not content or len(content) == 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded file is empty (0 bytes).",
+        )
+
+    try:
+        response = analyze_image_bytes(content, filename=file.filename or "image.jpg")
+        return response
+    except ValueError as exc:
+        logger.warning("Invalid image file uploaded: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
+    except Exception as exc:
+        logger.exception("Unexpected error processing image in v1 endpoint")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Internal analysis error: {exc}",
+        ) from exc
+

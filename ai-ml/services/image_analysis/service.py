@@ -20,16 +20,31 @@ from __future__ import annotations
 
 import logging
 import time
+from typing import Optional
 from uuid import UUID
 
-from schemas.image_analysis import AnalysisStatus, ImageAnalysisRequest, ImageAnalysisResponse
-from services.image_analysis.classifier import load_model, predict_synthetic
+import numpy as np
+
+from schemas.image_analysis import (
+    AnalysisStatus,
+    BackendImageAnalysisResponse,
+    ImageAnalysisRequest,
+    ImageAnalysisResponse,
+)
+from services.image_analysis.classifier import (
+    get_model_metadata,
+    load_model,
+    predict_synthetic,
+)
+from services.image_analysis.copy_move import detect_copy_move_and_splicing
 from services.image_analysis.ela import generate_ela
 from services.image_analysis.gradcam import generate_gradcam
 from services.image_analysis.noise import calculate_fft_high_freq_ratio, calculate_noise_variance
 from utils.image_utils import (
+    encode_image_to_base64_png,
     get_image_size,
     load_pil_image,
+    load_pil_image_from_bytes,
     preprocess_for_model,
 )
 from utils.storage import save_heatmap
@@ -164,3 +179,114 @@ def analyze_image(request: ImageAnalysisRequest) -> ImageAnalysisResponse:
         elapsed,
     )
     return response
+
+
+def analyze_image_bytes(
+    image_bytes: bytes,
+    filename: str = "image.jpg",
+) -> BackendImageAnalysisResponse:
+    """
+    Execute full Module 05 authenticity analysis directly from uploaded binary image bytes.
+
+    Matches Yashas's Spring Boot FastApiImageAnalysisResponse contract:
+      - ai_prob: [0.0, 1.0]
+      - manipulation_prob: [0.0, 1.0]
+      - noise_variance: non-negative float
+      - fft_anomaly_score: [0.0, 1.0]
+      - copy_move_detected: bool
+      - splicing_detected: bool
+      - model_name: string
+      - model_version: string
+      - ela_heatmap_base64: valid Base64 PNG string
+      - gradcam_heatmap_base64: valid Base64 PNG string or None
+      - evidence: structured dictionary
+      - status: "COMPLETED"
+
+    Args:
+        image_bytes: Raw binary image payload.
+        filename: Optional uploaded filename.
+
+    Returns:
+        BackendImageAnalysisResponse ready for serialization.
+    """
+    start_ms = int(time.monotonic() * 1000)
+    logger.info("Starting byte-level image analysis | filename=%s size=%d bytes", filename, len(image_bytes))
+
+    # Stage 1: Decode & preprocess image
+    pil_image = load_pil_image_from_bytes(image_bytes)
+    w, h = pil_image.size
+    image_tensor = preprocess_for_model(pil_image, input_size=settings.model_input_size)
+
+    # Stage 2: Classifier inference
+    model = load_model()
+    ai_prob, confidence = predict_synthetic(image_tensor)
+    model_name, model_version = get_model_metadata()
+
+    # Stage 3: Error Level Analysis
+    ela_heatmap_bgr, ela_manipulation_prob = generate_ela(pil_image)
+    ela_heatmap_base64 = encode_image_to_base64_png(ela_heatmap_bgr, is_bgr=True)
+
+    # Stage 4: Noise & FFT analysis
+    noise_variance = calculate_noise_variance(pil_image)
+    fft_ratio = calculate_fft_high_freq_ratio(pil_image)
+    fft_anomaly_score = float(np.clip(1.0 - fft_ratio, 0.0, 1.0))
+
+    # Stage 5: Copy-move & splicing classical CV
+    cv_result = detect_copy_move_and_splicing(pil_image)
+    copy_move_detected = cv_result.copy_move_detected
+    splicing_detected = cv_result.splicing_detected
+    combined_manipulation_prob = float(np.clip(
+        max(ela_manipulation_prob, cv_result.copy_move_score, cv_result.splicing_score),
+        0.0,
+        1.0,
+    ))
+
+    # Stage 6: Grad-CAM attention heatmap
+    gradcam_base64: Optional[str] = None
+    try:
+        gradcam_bgr = generate_gradcam(model, image_tensor, (w, h))
+        gradcam_base64 = encode_image_to_base64_png(gradcam_bgr, is_bgr=True)
+    except Exception as exc:
+        logger.warning("Grad-CAM generation failed (non-critical) | filename=%s error=%s", filename, exc)
+        gradcam_base64 = None
+
+    # Stage 7: Evidence aggregation
+    elapsed = int(time.monotonic() * 1000) - start_ms
+    evidence = {
+        "noise_variance": round(noise_variance, 6),
+        "fft_high_freq_ratio": round(fft_ratio, 4),
+        "fft_anomaly_score": round(fft_anomaly_score, 4),
+        "confidence": round(confidence, 4),
+        "ela_manipulation_prob": round(ela_manipulation_prob, 4),
+        "processing_time_ms": elapsed,
+        "dimensions": [w, h],
+        "copy_move": cv_result.evidence,
+    }
+
+    response = BackendImageAnalysisResponse(
+        ai_prob=round(ai_prob, 4),
+        manipulation_prob=round(combined_manipulation_prob, 4),
+        noise_variance=round(noise_variance, 6),
+        fft_anomaly_score=round(fft_anomaly_score, 4),
+        copy_move_detected=copy_move_detected,
+        splicing_detected=splicing_detected,
+        model_name=model_name,
+        model_version=model_version,
+        ela_heatmap_base64=ela_heatmap_base64,
+        gradcam_heatmap_base64=gradcam_base64,
+        evidence=evidence,
+        status="COMPLETED",
+    )
+
+    logger.info(
+        "Byte-level analysis complete | filename=%s ai_prob=%.4f manip_prob=%.4f "
+        "copy_move=%s splicing=%s elapsed_ms=%d",
+        filename,
+        response.ai_prob,
+        response.manipulation_prob,
+        response.copy_move_detected,
+        response.splicing_detected,
+        elapsed,
+    )
+    return response
+
