@@ -4,6 +4,7 @@ import com.truthlens.backend.dto.FastApiOcrResponse;
 import com.truthlens.backend.exception.AiServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.http.HttpStatusCode;
@@ -28,6 +29,7 @@ public class FastApiOcrServiceClient implements OcrAiServiceClient {
     private final RestClient restClient;
     private final String serviceUrl;
 
+    @Autowired
     public FastApiOcrServiceClient(
             RestClient.Builder restClientBuilder,
             @Value("${truthlens.ai.service-url:http://localhost:8001}") String serviceUrl,

@@ -5,6 +5,7 @@ import com.truthlens.backend.dto.FastApiClaimResponse;
 import com.truthlens.backend.exception.AiServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -26,6 +27,7 @@ public class FastApiClaimServiceClient implements ClaimAiServiceClient {
     private final RestClient restClient;
     private final String serviceUrl;
 
+    @Autowired
     public FastApiClaimServiceClient(
             RestClient.Builder restClientBuilder,
             @Value("${truthlens.ai.service-url:http://localhost:8001}") String serviceUrl,

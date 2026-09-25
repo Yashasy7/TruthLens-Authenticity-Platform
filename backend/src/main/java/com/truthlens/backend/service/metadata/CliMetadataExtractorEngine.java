@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 import java.io.BufferedReader;
@@ -35,6 +36,7 @@ public class CliMetadataExtractorEngine implements MetadataExtractorEngine {
     private final boolean exiftoolAvailable;
     private final boolean mediainfoAvailable;
 
+    @Autowired
     public CliMetadataExtractorEngine(ObjectMapper objectMapper) {
         this.objectMapper = objectMapper;
         this.exiftoolAvailable = checkCliAvailability("exiftool", "-ver");
