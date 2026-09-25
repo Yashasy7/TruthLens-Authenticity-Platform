@@ -1,8 +1,6 @@
 import React, { useState, useMemo } from 'react';
-import {
-  Claim,
+import type {
   ClaimType,
-  ClaimEntityType,
   ClaimAnalysisResponse,
 } from '../../types/claim';
 import './ClaimList.css';

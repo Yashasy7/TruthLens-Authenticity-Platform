@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Upload,
@@ -6,9 +6,10 @@ import {
   FolderKanban,
   FileText,
   HelpCircle,
-  ChevronDown,
   ArrowRight,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "../context/AuthContext";
 
 const navigation = [
   {
@@ -39,6 +40,18 @@ const navigation = [
 ];
 
 function DashboardLayout() {
+  const { user, logout } = useAuth();
+  const navigate = useNavigate();
+
+  const displayName = user?.fullName || user?.email?.split('@')[0] || "Investigator";
+  const userInitial = displayName.charAt(0).toUpperCase();
+  const roleDisplay = user?.roles?.map(r => r.replace('ROLE_', '')).join(', ') || "Analyst";
+
+  const handleLogout = async () => {
+    await logout();
+    navigate('/login', { replace: true });
+  };
+
   return (
     <div className="app-shell">
       {/* SIDEBAR */}
@@ -108,19 +121,27 @@ function DashboardLayout() {
             <span className="status-pulse" />
           </div>
 
-          <div className="user-card">
-            <div className="user-avatar">
-              S
+          <div className="user-card" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', overflow: 'hidden' }}>
+              <div className="user-avatar">
+                {userInitial}
+              </div>
+
+              <div className="user-info">
+                <strong>{displayName}</strong>
+                <small>{roleDisplay}</small>
+              </div>
             </div>
 
-            <div className="user-info">
-              <strong>Sudheendra</strong>
-              <small>Frontend Lead</small>
-            </div>
-
-            <span className="user-menu">
-              ⋮
-            </span>
+            <button
+              onClick={handleLogout}
+              className="icon-button"
+              aria-label="Log Out"
+              title="Log Out"
+              style={{ color: 'var(--text-secondary)' }}
+            >
+              <LogOut size={16} />
+            </button>
           </div>
         </div>
       </aside>
@@ -146,29 +167,37 @@ function DashboardLayout() {
           </div>
 
           <div className="topbar-actions">
-          <button
-  className="icon-button"
-  aria-label="Help"
-  title="Help"
->
-  <HelpCircle size={16} strokeWidth={1.8} />
-</button>
+            <button
+              className="icon-button"
+              aria-label="Help"
+              title="Help"
+            >
+              <HelpCircle size={16} strokeWidth={1.8} />
+            </button>
 
             <div className="topbar-divider" />
 
-            <button className="profile-button">
-              <span className="user-avatar small">
-                S
-              </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <button className="profile-button">
+                <span className="user-avatar small">
+                  {userInitial}
+                </span>
 
-              <span className="profile-name">
-                Sudheendra
-              </span>
+                <span className="profile-name">
+                  {displayName}
+                </span>
+              </button>
 
-             <span className="profile-chevron">
-  <ChevronDown size={14} />
-</span>
-            </button>
+              <button
+                onClick={handleLogout}
+                className="icon-button"
+                aria-label="Logout"
+                title="Logout"
+                style={{ marginLeft: '4px' }}
+              >
+                <LogOut size={16} strokeWidth={1.8} />
+              </button>
+            </div>
           </div>
         </header>
 

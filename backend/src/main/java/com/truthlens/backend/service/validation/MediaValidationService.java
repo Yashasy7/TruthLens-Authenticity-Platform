@@ -71,6 +71,8 @@ public class MediaValidationService {
                 "audio/mp3",
                 "audio/wav",
                 "audio/x-wav",
+                "audio/wave",
+                "audio/vnd.wave",
                 "audio/ogg",
                 "audio/flac",
                 "audio/x-flac",

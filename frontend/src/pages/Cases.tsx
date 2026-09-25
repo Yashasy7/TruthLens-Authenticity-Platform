@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Info } from "lucide-react";
 import type {
   CaseStatus,
   InvestigationCase,
@@ -91,6 +92,26 @@ function Cases() {
         >
           + New Case
         </button>
+      </div>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          background: "var(--warning-soft)",
+          color: "var(--warning)",
+          padding: "14px 18px",
+          borderRadius: "10px",
+          fontSize: "13px",
+          marginBottom: "20px",
+          border: "1px solid rgba(217, 154, 0, 0.2)",
+        }}
+      >
+        <Info size={18} style={{ flexShrink: 0 }} />
+        <span>
+          <strong>Backend Dependency Status (Module 17):</strong> Case Management backend REST controllers and database entities are not yet implemented in the backend architecture. This interface displays the preview schema.
+        </span>
       </div>
 
       <div className="case-stats">

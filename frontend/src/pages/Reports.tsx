@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Info } from "lucide-react";
 import type {
   InvestigationReport,
   ReportStatus,
@@ -91,6 +92,26 @@ function Reports() {
           Open Latest Report →
         </button>
       </header>
+
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "12px",
+          background: "var(--warning-soft)",
+          color: "var(--warning)",
+          padding: "14px 18px",
+          borderRadius: "10px",
+          fontSize: "13px",
+          marginBottom: "20px",
+          border: "1px solid rgba(217, 154, 0, 0.2)",
+        }}
+      >
+        <Info size={18} style={{ flexShrink: 0 }} />
+        <span>
+          <strong>Backend Dependency Status (Module 18):</strong> Report Generation & Export service (PDF/JSON) is not yet implemented in the backend architecture. This interface operates in preview mode.
+        </span>
+      </div>
 
       {/* =================================
           STATS
@@ -316,7 +337,7 @@ function ReportCard({
       </div>
 
       <div className="report-card-footer">
-        <span>{report.generatedAt}</span>
+        <span>{report.metadata.generatedAt}</span>
 
         <span className="report-open">
           Open →
@@ -394,7 +415,7 @@ function ReportPreview({
 
         <MetadataItem
           label="GENERATED"
-          value={report.generatedAt}
+          value={report.metadata.generatedAt}
         />
 
         <MetadataItem
