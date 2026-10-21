@@ -34,7 +34,7 @@ class Settings(BaseSettings):
 
     # PyTorch / timm classifier settings (Blueprint: PyTorch 2.2 + timm)
     classifier_backbone: str = "efficientnet_b0"
-    classifier_checkpoint: str = ""   # Relative to model_dir or absolute path
+    classifier_checkpoint: str = "cifake-10-epoch.pt"   # Relative to model_dir or absolute path
     require_checkpoint: bool = False  # If True, strictly requires a valid checkpoint file
     model_name: str = "TruthLens-EfficientNet-B0"
     model_version: str = "0.1.0-dev"

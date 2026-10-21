@@ -93,20 +93,88 @@ def main() -> None:
         ckpt_name = args.checkpoint_name or default_ckpt
         output_path = args.output_dir / ckpt_name
 
-        dataset = ImageFolderAuthenticityDataset.from_directory(args.data_dir)
-        if len(dataset) < 4:
-            logger.error("Image dataset must contain at least 4 images (found %d)", len(dataset))
-            sys.exit(1)
+        # Support CIFAKE's train/REAL, train/FAKE structure.
+        train_dir = args.data_dir / "train"
+        test_dir = args.data_dir / "test"
 
-        samples = list(dataset.samples)
-        random.seed(42)
-        random.shuffle(samples)
+        if train_dir.is_dir():
+            # Use the official training split only.
+            dataset = ImageFolderAuthenticityDataset.from_directory(train_dir)
 
-        val_count = max(1, int(len(samples) * args.val_split))
-        train_samples = samples[val_count:]
-        val_samples = samples[:val_count]
+            if len(dataset) < 4:
+                logger.error(
+                    "CIFAKE training directory must contain at least "
+                    "4 images (found %d)",
+                    len(dataset),
+                )
+                sys.exit(1)
 
-        logger.info("Image dataset split: %d train, %d validation", len(train_samples), len(val_samples))
+            samples = list(dataset.samples)
+            random.seed(42)
+            random.shuffle(samples)
+
+            val_count = max(1, int(len(samples) * args.val_split))
+
+            if val_count >= len(samples):
+                logger.error(
+                    "Validation split leaves no training images. "
+                    "Reduce --val-split."
+                )
+                sys.exit(1)
+
+            train_samples = samples[val_count:]
+            val_samples = samples[:val_count]
+
+            logger.info(
+                "CIFAKE split: %d training, %d validation; "
+                "official test data remains separate.",
+                len(train_samples),
+                len(val_samples),
+            )
+
+            if test_dir.is_dir():
+                logger.info(
+                    "Official test directory found at %s; "
+                    "it will not be used for training or validation.",
+                    test_dir,
+                )
+
+        else:
+            # Preserve support for datasets with REAL/FAKE directly
+            # inside --data-dir.
+            dataset = ImageFolderAuthenticityDataset.from_directory(
+                args.data_dir
+            )
+
+            if len(dataset) < 4:
+                logger.error(
+                    "Image dataset must contain at least "
+                    "4 images (found %d)",
+                    len(dataset),
+                )
+                sys.exit(1)
+
+            samples = list(dataset.samples)
+            random.seed(42)
+            random.shuffle(samples)
+
+            val_count = max(1, int(len(samples) * args.val_split))
+
+            if val_count >= len(samples):
+                logger.error(
+                    "Validation split leaves no training images. "
+                    "Reduce --val-split."
+                )
+                sys.exit(1)
+
+            train_samples = samples[val_count:]
+            val_samples = samples[:val_count]
+
+            logger.info(
+                "Image dataset split: %d train, %d validation",
+                len(train_samples),
+                len(val_samples),
+            )
 
         result = train_classifier(
             train_samples=train_samples,
@@ -121,11 +189,10 @@ def main() -> None:
         )
 
         logger.info(
-            "Image training complete. Best validation F1: %.4f | Checkpoint: %s",
+            "Image training complete. Best validation F1: %.4f | "
+            "Checkpoint: %s",
             result["best_val_f1"],
             result["checkpoint_path"],
         )
-
-
 if __name__ == "__main__":
     main()

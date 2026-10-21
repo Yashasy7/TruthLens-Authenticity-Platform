@@ -220,3 +220,27 @@ __marimo__/
 node_modules/
 
 .vscode/
+
+# TruthLens AI/ML virtual environments
+ai-ml/venv/
+ai-ml/venv311/
+ai-ml/venv313/
+
+# TruthLens AI/ML virtual environments
+ai-ml/venv/
+ai-ml/venv311/
+ai-ml/venv313/
+
+# CIFAKE dataset - keep local, do not commit
+ai-ml/data/cifake/
+
+# macOS metadata
+.DS_Store
+
+# Generated TruthLens analysis artifacts
+ai-ml/artifacts/
+ai-ml/storage/ela/
+
+# Local model checkpoints not intended for distribution
+ai-ml/models/cifake-smoke-test.pt
+ai-ml/models/cifake-validation-run.pt

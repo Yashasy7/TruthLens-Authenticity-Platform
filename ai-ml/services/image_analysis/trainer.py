@@ -133,11 +133,31 @@ def compute_metrics(
     f1 = 2 * (precision * recall) / (precision + recall) if (precision + recall) > 0 else 0.0
 
     # Mann-Whitney U for ROC-AUC
-    n_pos = np.sum(y_true == 1.0)
-    n_neg = np.sum(y_true == 0.0)
+        # Mann-Whitney U for ROC-AUC, using average ranks for ties.
+    n_pos = int(np.sum(y_true == 1.0))
+    n_neg = int(np.sum(y_true == 0.0))
+
     if n_pos > 0 and n_neg > 0:
-        # Rank scores
-        ranks = np.argsort(np.argsort(y_prob)) + 1
+        order = np.argsort(y_prob, kind="mergesort")
+        sorted_probs = y_prob[order]
+
+        ranks = np.empty(len(y_prob), dtype=np.float64)
+
+        start = 0
+        while start < len(sorted_probs):
+            end = start + 1
+
+            while (
+                end < len(sorted_probs)
+                and sorted_probs[end] == sorted_probs[start]
+            ):
+                end += 1
+
+            # Ranks are 1-based; tied values receive their average rank.
+            average_rank = ((start + 1) + end) / 2.0
+            ranks[order[start:end]] = average_rank
+            start = end
+
         rank_sum_pos = np.sum(ranks[y_true == 1.0])
         u_stat = rank_sum_pos - (n_pos * (n_pos + 1)) / 2.0
         roc_auc = float(u_stat / (n_pos * n_neg))
@@ -183,7 +203,17 @@ def train_classifier(
     Returns:
         Dictionary of training and final validation metrics.
     """
-    dev = device or torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    if device is not None:
+        dev = device
+    elif torch.cuda.is_available():
+        dev = torch.device("cuda")
+    elif (
+        hasattr(torch.backends, "mps")
+        and torch.backends.mps.is_available()
+    ):
+        dev = torch.device("mps")
+    else:
+        dev = torch.device("cpu")
     logger.info("Initializing training on %s (unfreeze_backbone=%s)", dev, unfreeze_backbone)
 
     train_tf, val_tf = get_transforms(input_size=224)

@@ -153,3 +153,20 @@ class TestTrainerAndMetrics:
         with pytest.raises(FileNotFoundError) as exc_info:
             load_model()
         assert "not found" in str(exc_info.value)
+
+    def test_compute_metrics_roc_auc_with_tied_probabilities(self):
+        y_true = np.array([0.0, 1.0, 0.0, 1.0])
+        y_prob = np.array([0.5, 0.5, 0.2, 0.8])
+
+        metrics = compute_metrics(y_true, y_prob)
+
+        # The 0.5 scores are tied and must receive average ranks.
+        assert metrics["roc_auc"] == 0.875
+
+    def test_compute_metrics_roc_auc_for_identical_probabilities(self):
+        y_true = np.array([0.0, 0.0, 1.0, 1.0])
+        y_prob = np.array([0.5, 0.5, 0.5, 0.5])
+
+        metrics = compute_metrics(y_true, y_prob)
+
+        assert metrics["roc_auc"] == 0.5
