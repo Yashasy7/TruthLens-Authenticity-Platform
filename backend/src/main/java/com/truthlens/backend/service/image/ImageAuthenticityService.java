@@ -85,7 +85,12 @@ public class ImageAuthenticityService {
         Media media = authorizeAndValidateMedia(mediaId, currentUserEmail);
 
         return imageAnalysisRepository.findByMediaId(mediaId)
-                .map(this::toResponse)
+                .map(existing -> {
+                    if (existing.getAnalysisStatus() == AnalysisStatus.FAILED) {
+                        return executeAnalysis(media);
+                    }
+                    return toResponse(existing);
+                })
                 .orElseGet(() -> executeAnalysis(media));
     }
 
@@ -288,6 +293,9 @@ public class ImageAuthenticityService {
     // -------------------------------------------------------------------------
 
     private ImageAnalysisResponse toResponse(ImageAnalysis entity) {
+        if (entity.getAnalysisStatus() == AnalysisStatus.FAILED) {
+            throw new AiServiceException("Image authenticity analysis failed for media ID: " + entity.getMedia().getId());
+        }
         ImageEvidenceDto evidence = parseEvidence(entity.getEvidenceJson(), entity);
         String assessment = computeAuthenticityAssessment(entity.getAiProb(), entity.getManipulationProb(), entity.getAnalysisStatus());
 

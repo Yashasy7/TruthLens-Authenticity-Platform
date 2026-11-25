@@ -1,5 +1,6 @@
 package com.truthlens.backend.service;
 
+import com.truthlens.backend.dto.MediaContentResource;
 import com.truthlens.backend.dto.MediaResponse;
 import com.truthlens.backend.dto.MediaUploadResponse;
 import com.truthlens.backend.entity.AccountStatus;
@@ -28,6 +29,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.security.access.AccessDeniedException;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
@@ -365,5 +367,95 @@ class MediaServiceTest {
         assertThat(results).hasSize(2);
         assertThat(results.get(0).getOriginalFilename()).isEqualTo("a.jpg");
         assertThat(results.get(1).getOriginalFilename()).isEqualTo("b.mp4");
+    }
+
+    @Test
+    @DisplayName("Streams media content when accessed by the owner")
+    void getMediaContent_ownerAccess_returnsResource() throws Exception {
+        UUID mediaId = UUID.randomUUID();
+        Media media = new Media(
+                activeUser, "original.png", "quarantine/original.png",
+                MediaType.IMAGE, "image/png", 2048, "hash", UploadStatus.UPLOADED
+        );
+        setPrivateField(media, "id", mediaId);
+
+        when(mediaRepository.findById(mediaId)).thenReturn(Optional.of(media));
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(activeUser));
+        when(storageService.exists("quarantine/original.png")).thenReturn(true);
+        when(storageService.load("quarantine/original.png")).thenReturn(new ByteArrayInputStream("image-content".getBytes()));
+
+        MediaContentResource resource = mediaService.getMediaContent(mediaId, userEmail);
+
+        assertThat(resource).isNotNull();
+        assertThat(resource.mimeType()).isEqualTo("image/png");
+        assertThat(resource.originalFilename()).isEqualTo("original.png");
+        assertThat(resource.fileSize()).isEqualTo(2048);
+        assertThat(resource.inputStream()).hasContent("image-content");
+    }
+
+    @Test
+    @DisplayName("Streams media content when accessed by elevated analyst")
+    void getMediaContent_analystAccess_returnsResource() throws Exception {
+        UUID mediaId = UUID.randomUUID();
+        Media media = new Media(
+                activeUser, "evidence.jpg", "quarantine/evidence.jpg",
+                MediaType.IMAGE, "image/jpeg", 4096, "hash", UploadStatus.UPLOADED
+        );
+        setPrivateField(media, "id", mediaId);
+
+        User analyst = new User("analyst@truthlens.org", "hash", "Analyst");
+        setPrivateField(analyst, "id", UUID.randomUUID());
+        analyst.getRoles().add(new Role(RoleName.ANALYST, "Analyst"));
+
+        when(mediaRepository.findById(mediaId)).thenReturn(Optional.of(media));
+        when(userRepository.findByEmail("analyst@truthlens.org")).thenReturn(Optional.of(analyst));
+        when(storageService.exists("quarantine/evidence.jpg")).thenReturn(true);
+        when(storageService.load("quarantine/evidence.jpg")).thenReturn(new ByteArrayInputStream("jpeg-content".getBytes()));
+
+        MediaContentResource resource = mediaService.getMediaContent(mediaId, "analyst@truthlens.org");
+
+        assertThat(resource).isNotNull();
+        assertThat(resource.mimeType()).isEqualTo("image/jpeg");
+    }
+
+    @Test
+    @DisplayName("Blocks IDOR: Non-owner with ROLE_USER cannot stream other user's media content")
+    void getMediaContent_otherUserRoleUser_throwsAccessDeniedException() throws Exception {
+        UUID mediaId = UUID.randomUUID();
+        Media media = new Media(
+                activeUser, "secret.png", "quarantine/secret.png",
+                MediaType.IMAGE, "image/png", 1024, "hash", UploadStatus.UPLOADED
+        );
+        setPrivateField(media, "id", mediaId);
+
+        User attacker = new User("intruder@truthlens.org", "hash", "Attacker");
+        setPrivateField(attacker, "id", UUID.randomUUID());
+        attacker.getRoles().add(new Role(RoleName.USER, "Standard user"));
+
+        when(mediaRepository.findById(mediaId)).thenReturn(Optional.of(media));
+        when(userRepository.findByEmail("intruder@truthlens.org")).thenReturn(Optional.of(attacker));
+
+        assertThatThrownBy(() -> mediaService.getMediaContent(mediaId, "intruder@truthlens.org"))
+                .isInstanceOf(AccessDeniedException.class)
+                .hasMessageContaining("You do not have permission to access this media");
+    }
+
+    @Test
+    @DisplayName("Throws MediaNotFoundException when quarantined storage file does not exist")
+    void getMediaContent_fileMissingInStorage_throwsMediaNotFoundException() throws Exception {
+        UUID mediaId = UUID.randomUUID();
+        Media media = new Media(
+                activeUser, "missing.png", "quarantine/missing.png",
+                MediaType.IMAGE, "image/png", 1024, "hash", UploadStatus.UPLOADED
+        );
+        setPrivateField(media, "id", mediaId);
+
+        when(mediaRepository.findById(mediaId)).thenReturn(Optional.of(media));
+        when(userRepository.findByEmail(userEmail)).thenReturn(Optional.of(activeUser));
+        when(storageService.exists("quarantine/missing.png")).thenReturn(false);
+
+        assertThatThrownBy(() -> mediaService.getMediaContent(mediaId, userEmail))
+                .isInstanceOf(MediaNotFoundException.class)
+                .hasMessageContaining("Media content file not found in storage");
     }
 }

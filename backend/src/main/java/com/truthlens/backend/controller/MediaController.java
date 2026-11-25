@@ -1,8 +1,12 @@
 package com.truthlens.backend.controller;
 
+import com.truthlens.backend.dto.MediaContentResource;
 import com.truthlens.backend.dto.MediaResponse;
 import com.truthlens.backend.dto.MediaUploadResponse;
 import com.truthlens.backend.service.MediaService;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -73,6 +77,37 @@ public class MediaController {
         String userEmail = authentication.getName();
         MediaResponse response = mediaService.getMediaById(id, userEmail);
         return ResponseEntity.ok(response);
+    }
+
+    /**
+     * Streams the original quarantined media content file for authorized users.
+     *
+     * <p>Enforces the same IDOR and role-based access control: standard users may only stream their own
+     * uploads, while elevated roles (ANALYST, MODERATOR, ADMIN) may access any media.</p>
+     *
+     * @param id             the media's unique identifier
+     * @param authentication the authenticated user identity
+     * @return HTTP 200 OK with streamed media {@link Resource} and stored MIME type
+     */
+    @GetMapping("/{id}/content")
+    public ResponseEntity<Resource> getMediaContent(
+            @PathVariable("id") UUID id,
+            Authentication authentication) {
+        String userEmail = authentication.getName();
+        MediaContentResource resource = mediaService.getMediaContent(id, userEmail);
+
+        MediaType mediaType;
+        try {
+            mediaType = MediaType.parseMediaType(resource.mimeType());
+        } catch (Exception e) {
+            mediaType = MediaType.APPLICATION_OCTET_STREAM;
+        }
+
+        return ResponseEntity.ok()
+                .contentType(mediaType)
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"" + resource.originalFilename() + "\"")
+                .header(HttpHeaders.CONTENT_LENGTH, String.valueOf(resource.fileSize()))
+                .body(new InputStreamResource(resource.inputStream()));
     }
 
     /**

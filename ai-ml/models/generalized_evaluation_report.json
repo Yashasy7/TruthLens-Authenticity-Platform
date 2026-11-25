@@ -1,0 +1,329 @@
+{
+  "evaluation_title": "TruthLens EfficientNet-B0 Generalized Fine-Tuning Evaluation",
+  "timestamp": "2026-11-09T15:16:22.975257+00:00",
+  "training_configuration": {
+    "initial_checkpoint": "C:\\Users\\Yashas H L\\IdeaProjects\\TruthLens\\TruthLens-Authenticity-Platform\\ai-ml\\models\\deepfake_detection_efficientnet_b0.pt",
+    "output_checkpoint": "C:\\Users\\Yashas H L\\IdeaProjects\\TruthLens\\TruthLens-Authenticity-Platform\\ai-ml\\models\\deepfake_detection_efficientnet_b0_generalized.pt",
+    "backbone": "efficientnet_b0",
+    "epochs": 5,
+    "best_epoch": 4,
+    "batch_size": 64,
+    "learning_rates": {
+      "backbone": 1e-05,
+      "classifier_head": 0.0001
+    },
+    "training_samples": 7112,
+    "validation_samples": 1600,
+    "duration_seconds": 4058.61,
+    "duration_minutes": 67.64,
+    "history": [
+      {
+        "accuracy": 0.6825,
+        "precision": 0.7296,
+        "recall": 0.58,
+        "f1": 0.6462,
+        "roc_auc": 0.7541,
+        "confusion_matrix": {
+          "tp": 464,
+          "tn": 628,
+          "fp": 172,
+          "fn": 336,
+          "matrix": [
+            [
+              628,
+              172
+            ],
+            [
+              336,
+              464
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1600,
+        "support_real": 800,
+        "support_fake": 800,
+        "train_loss": 0.864,
+        "epoch": 1,
+        "epoch_duration_s": 848.8
+      },
+      {
+        "accuracy": 0.7225,
+        "precision": 0.7465,
+        "recall": 0.6737,
+        "f1": 0.7083,
+        "roc_auc": 0.7998,
+        "confusion_matrix": {
+          "tp": 539,
+          "tn": 617,
+          "fp": 183,
+          "fn": 261,
+          "matrix": [
+            [
+              617,
+              183
+            ],
+            [
+              261,
+              539
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1600,
+        "support_real": 800,
+        "support_fake": 800,
+        "train_loss": 0.633,
+        "epoch": 2,
+        "epoch_duration_s": 756.04
+      },
+      {
+        "accuracy": 0.7244,
+        "precision": 0.7377,
+        "recall": 0.6963,
+        "f1": 0.7164,
+        "roc_auc": 0.8102,
+        "confusion_matrix": {
+          "tp": 557,
+          "tn": 602,
+          "fp": 198,
+          "fn": 243,
+          "matrix": [
+            [
+              602,
+              198
+            ],
+            [
+              243,
+              557
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1600,
+        "support_real": 800,
+        "support_fake": 800,
+        "train_loss": 0.5602,
+        "epoch": 3,
+        "epoch_duration_s": 724.09
+      },
+      {
+        "accuracy": 0.7381,
+        "precision": 0.7564,
+        "recall": 0.7025,
+        "f1": 0.7285,
+        "roc_auc": 0.8262,
+        "confusion_matrix": {
+          "tp": 562,
+          "tn": 619,
+          "fp": 181,
+          "fn": 238,
+          "matrix": [
+            [
+              619,
+              181
+            ],
+            [
+              238,
+              562
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1600,
+        "support_real": 800,
+        "support_fake": 800,
+        "train_loss": 0.5192,
+        "epoch": 4,
+        "epoch_duration_s": 790.14
+      },
+      {
+        "accuracy": 0.7388,
+        "precision": 0.7683,
+        "recall": 0.6837,
+        "f1": 0.7235,
+        "roc_auc": 0.8269,
+        "confusion_matrix": {
+          "tp": 547,
+          "tn": 635,
+          "fp": 165,
+          "fn": 253,
+          "matrix": [
+            [
+              635,
+              165
+            ],
+            [
+              253,
+              547
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1600,
+        "support_real": 800,
+        "support_fake": 800,
+        "train_loss": 0.5145,
+        "epoch": 5,
+        "epoch_duration_s": 867.94
+      }
+    ]
+  },
+  "test_results": {
+    "general_scenes_unseen_test": {
+      "dataset_path": "C:\\Users\\Yashas H L\\IdeaProjects\\TruthLens\\TruthLens-Authenticity-Platform\\ai-ml\\data\\expanded_image_detection\\general_scenes_v2\\test",
+      "total_samples": 1358,
+      "baseline_model": {
+        "accuracy": 0.4293,
+        "precision": 0.3554,
+        "recall": 0.1738,
+        "f1": 0.2334,
+        "roc_auc": 0.3564,
+        "confusion_matrix": {
+          "tp": 118,
+          "tn": 465,
+          "fp": 214,
+          "fn": 561,
+          "matrix": [
+            [
+              465,
+              214
+            ],
+            [
+              561,
+              118
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1358,
+        "support_real": 679,
+        "support_fake": 679
+      },
+      "generalized_model": {
+        "accuracy": 0.4124,
+        "precision": 0.4017,
+        "recall": 0.3579,
+        "f1": 0.3785,
+        "roc_auc": 0.3899,
+        "confusion_matrix": {
+          "tp": 243,
+          "tn": 317,
+          "fp": 362,
+          "fn": 436,
+          "matrix": [
+            [
+              317,
+              362
+            ],
+            [
+              436,
+              243
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 1358,
+        "support_real": 679,
+        "support_fake": 679
+      },
+      "generator_breakdown": {
+        "midjourney_unseen": {
+          "samples": 179,
+          "baseline_detection_rate": 0.1564,
+          "generalized_detection_rate": 0.3184
+        },
+        "wukong_unseen": {
+          "samples": 500,
+          "baseline_detection_rate": 0.18,
+          "generalized_detection_rate": 0.372
+        }
+      }
+    },
+    "portrait_test": {
+      "dataset_path": "C:\\Users\\Yashas H L\\IdeaProjects\\TruthLens\\TruthLens-Authenticity-Platform\\ai-ml\\data\\deepfake_detection\\test",
+      "total_samples": 14000,
+      "baseline_model": {
+        "accuracy": 0.8363,
+        "precision": 0.8304,
+        "recall": 0.8451,
+        "f1": 0.8377,
+        "roc_auc": 0.9135,
+        "confusion_matrix": {
+          "tp": 5916,
+          "tn": 5792,
+          "fp": 1208,
+          "fn": 1084,
+          "matrix": [
+            [
+              5792,
+              1208
+            ],
+            [
+              1084,
+              5916
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 14000,
+        "support_real": 7000,
+        "support_fake": 7000
+      },
+      "generalized_model": {
+        "accuracy": 0.7993,
+        "precision": 0.7893,
+        "recall": 0.8166,
+        "f1": 0.8027,
+        "roc_auc": 0.8809,
+        "confusion_matrix": {
+          "tp": 5716,
+          "tn": 5474,
+          "fp": 1526,
+          "fn": 1284,
+          "matrix": [
+            [
+              5474,
+              1526
+            ],
+            [
+              1284,
+              5716
+            ]
+          ],
+          "labels": [
+            "Authentic (0)",
+            "Synthetic (1)"
+          ]
+        },
+        "total_samples": 14000,
+        "support_real": 7000,
+        "support_fake": 7000
+      }
+    }
+  }
+}

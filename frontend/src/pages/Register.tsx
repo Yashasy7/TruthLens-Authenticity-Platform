@@ -1,7 +1,15 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import { UserPlus, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
+import {
+  AlertCircle,
+  ArrowRight,
+  CheckCircle2,
+  Mail,
+  Lock,
+  User,
+  ShieldCheck,
+} from 'lucide-react';
 
 export const Register: React.FC = () => {
   const navigate = useNavigate();
@@ -67,41 +75,59 @@ export const Register: React.FC = () => {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'var(--bg)',
-        padding: '20px',
+        background: 'radial-gradient(ellipse at top, #1e1b4b 0%, #0f172a 60%, #090d16 100%)',
+        padding: '24px 20px',
+        position: 'relative',
+        overflow: 'hidden',
       }}
     >
       <div
         style={{
+          position: 'absolute',
+          inset: 0,
+          backgroundImage:
+            'linear-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, 0.03) 1px, transparent 1px)',
+          backgroundSize: '40px 40px',
+          pointerEvents: 'none',
+        }}
+      />
+
+      <div
+        style={{
           width: '100%',
           maxWidth: '440px',
-          background: 'var(--surface)',
-          borderRadius: '16px',
-          border: '1px solid var(--border)',
-          padding: '36px',
-          boxShadow: '0 8px 30px rgba(0, 0, 0, 0.04)',
+          background: 'rgba(255, 255, 255, 0.98)',
+          borderRadius: '20px',
+          border: '1px solid rgba(226, 232, 240, 0.8)',
+          padding: '40px 36px',
+          boxShadow: '0 20px 50px rgba(0, 0, 0, 0.35)',
+          position: 'relative',
+          zIndex: 1,
+          backdropFilter: 'blur(16px)',
         }}
       >
         <div style={{ textAlign: 'center', marginBottom: '28px' }}>
           <div
             style={{
-              width: '48px',
-              height: '48px',
-              borderRadius: '12px',
-              background: 'var(--primary-soft)',
-              color: 'var(--primary)',
+              width: '56px',
+              height: '56px',
+              borderRadius: '14px',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #7c3aed 100%)',
+              color: '#ffffff',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              margin: '0 auto 14px',
+              margin: '0 auto 16px',
+              boxShadow: '0 8px 24px rgba(79, 70, 229, 0.35)',
             }}
           >
-            <UserPlus size={26} strokeWidth={2} />
+            <ShieldCheck size={30} strokeWidth={2.2} />
           </div>
-          <h2 style={{ fontSize: '22px', fontWeight: 800, margin: '0 0 6px', color: 'var(--text)' }}>
+
+          <h1 style={{ fontSize: '24px', fontWeight: 800, margin: '0 0 6px', color: '#0f172a', letterSpacing: '-0.5px' }}>
             Join TruthLens
-          </h2>
-          <p style={{ margin: 0, fontSize: '13px', color: 'var(--text-secondary)' }}>
+          </h1>
+          <p style={{ margin: 0, fontSize: '13px', color: '#64748b', lineHeight: 1.45 }}>
             Create an investigator account for media authenticity analysis
           </p>
         </div>
@@ -112,10 +138,11 @@ export const Register: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              background: 'var(--danger-soft)',
-              color: 'var(--danger)',
+              background: '#fef2f2',
+              color: '#b91c1c',
+              border: '1px solid #fecaca',
               padding: '12px 14px',
-              borderRadius: '8px',
+              borderRadius: '10px',
               fontSize: '13px',
               marginBottom: '20px',
             }}
@@ -131,10 +158,11 @@ export const Register: React.FC = () => {
               display: 'flex',
               alignItems: 'center',
               gap: '10px',
-              background: 'var(--success-soft)',
-              color: 'var(--success)',
+              background: '#ecfdf5',
+              color: '#047857',
+              border: '1px solid #a7f3d0',
               padding: '12px 14px',
-              borderRadius: '8px',
+              borderRadius: '10px',
               fontSize: '13px',
               marginBottom: '20px',
             }}
@@ -149,99 +177,141 @@ export const Register: React.FC = () => {
             <label
               style={{
                 display: 'block',
-                fontSize: '11px',
-                fontWeight: 750,
+                fontSize: '12px',
+                fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '6px',
-                color: 'var(--text-secondary)',
+                letterSpacing: '0.6px',
+                marginBottom: '8px',
+                color: '#334155',
               }}
             >
-              Full Name (Optional)
+              Full Name
             </label>
-            <input
-              type="text"
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-              placeholder="Dr. Alex Rivera"
-              style={{
-                width: '100%',
-                padding: '11px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface-soft)',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type="text"
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+                placeholder="Dr. Alex Rivera"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px 12px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  color: '#0f172a',
+                }}
+              />
+              <User
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '13px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#94a3b8',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
           </div>
 
           <div>
             <label
               style={{
                 display: 'block',
-                fontSize: '11px',
-                fontWeight: 750,
+                fontSize: '12px',
+                fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '6px',
-                color: 'var(--text-secondary)',
+                letterSpacing: '0.6px',
+                marginBottom: '8px',
+                color: '#334155',
               }}
             >
               Email Address
             </label>
-            <input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="alex.rivera@truthlens.org"
-              required
-              style={{
-                width: '100%',
-                padding: '11px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface-soft)',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="analyst@truthlens.org"
+                required
+                style={{
+                  width: '100%',
+                  padding: '12px 14px 12px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  color: '#0f172a',
+                }}
+              />
+              <Mail
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '13px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#94a3b8',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
           </div>
 
           <div>
             <label
               style={{
                 display: 'block',
-                fontSize: '11px',
-                fontWeight: 750,
+                fontSize: '12px',
+                fontWeight: 700,
                 textTransform: 'uppercase',
-                letterSpacing: '0.05em',
-                marginBottom: '6px',
-                color: 'var(--text-secondary)',
+                letterSpacing: '0.6px',
+                marginBottom: '8px',
+                color: '#334155',
               }}
             >
-              Password (min. 8 characters)
+              Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              required
-              minLength={8}
-              style={{
-                width: '100%',
-                padding: '11px 14px',
-                borderRadius: '8px',
-                border: '1px solid var(--border)',
-                background: 'var(--surface-soft)',
-                fontSize: '14px',
-                outline: 'none',
-                boxSizing: 'border-box',
-              }}
-            />
+            <div style={{ position: 'relative' }}>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Minimum 8 characters"
+                required
+                minLength={8}
+                style={{
+                  width: '100%',
+                  padding: '12px 14px 12px 38px',
+                  borderRadius: '10px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  fontSize: '14px',
+                  outline: 'none',
+                  boxSizing: 'border-box',
+                  color: '#0f172a',
+                }}
+              />
+              <Lock
+                size={16}
+                style={{
+                  position: 'absolute',
+                  left: '13px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  color: '#94a3b8',
+                  pointerEvents: 'none',
+                }}
+              />
+            </div>
           </div>
 
           <button
@@ -253,26 +323,27 @@ export const Register: React.FC = () => {
               justifyContent: 'center',
               gap: '8px',
               width: '100%',
-              padding: '12px',
-              borderRadius: '8px',
+              padding: '13px',
+              borderRadius: '10px',
               border: 'none',
-              background: 'var(--primary)',
+              background: 'linear-gradient(135deg, #4f46e5 0%, #6366f1 100%)',
               color: '#ffffff',
               fontSize: '14px',
-              fontWeight: 650,
+              fontWeight: 700,
               cursor: isSubmitting ? 'not-allowed' : 'pointer',
-              opacity: isSubmitting ? 0.7 : 1,
+              opacity: isSubmitting ? 0.75 : 1,
+              boxShadow: '0 4px 14px rgba(79, 70, 229, 0.35)',
               marginTop: '6px',
             }}
           >
-            <span>{isSubmitting ? 'Creating Account...' : 'Register Account'}</span>
+            <span>{isSubmitting ? 'Creating Investigator Account...' : 'Register Account'}</span>
             {!isSubmitting && <ArrowRight size={16} />}
           </button>
         </form>
 
-        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
+        <div style={{ marginTop: '24px', textAlign: 'center', fontSize: '13px', color: '#64748b' }}>
           Already have an account?{' '}
-          <Link to="/login" style={{ color: 'var(--primary)', fontWeight: 600 }}>
+          <Link to="/login" style={{ color: '#4f46e5', fontWeight: 650, textDecoration: 'none' }}>
             Sign in
           </Link>
         </div>
@@ -280,4 +351,5 @@ export const Register: React.FC = () => {
     </div>
   );
 };
+
 export default Register;

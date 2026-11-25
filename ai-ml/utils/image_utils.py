@@ -57,9 +57,12 @@ def load_pil_image(image_path: str | Path) -> Image.Image:
     """
     path = validate_image_path(image_path)
     try:
-        img = Image.open(path).convert("RGB")
+        raw_img = Image.open(path)
+        orig_format = raw_img.format
+        img = raw_img.convert("RGB")
+        img.format = orig_format
         img.load()  # Force decode to catch corrupted files early
-        logger.debug("Loaded image: %s  size=%s", path.name, img.size)
+        logger.debug("Loaded image: %s  format=%s  size=%s", path.name, orig_format, img.size)
         return img
     except UnidentifiedImageError as exc:
         raise ValueError(f"Cannot decode image file '{path}': {exc}") from exc
@@ -118,7 +121,10 @@ def load_pil_image_from_bytes(image_bytes: bytes) -> Image.Image:
         raise ValueError("Image bytes cannot be empty.")
     try:
         buf = io.BytesIO(image_bytes)
-        img = Image.open(buf).convert("RGB")
+        raw_img = Image.open(buf)
+        orig_format = raw_img.format
+        img = raw_img.convert("RGB")
+        img.format = orig_format
         img.load()
         return img
     except UnidentifiedImageError as exc:

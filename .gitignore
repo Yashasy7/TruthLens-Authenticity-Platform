@@ -244,3 +244,32 @@ ai-ml/storage/ela/
 # Local model checkpoints not intended for distribution
 ai-ml/models/cifake-smoke-test.pt
 ai-ml/models/cifake-validation-run.pt
+ai-ml/checkpoints/
+*.pt
+*.pth
+
+
+# TruthLens local datasets and archives
+datasets/
+ai-ml/data/
+*.zip
+
+# Generated forensic artifacts
+ai-ml/storage/gradcam/
+ai-ml/storage/spectrogram/
+ai-ml/storage/ela/
+ai-ml/storage/fft/
+ai-ml/storage/noise/
+
+# Uploaded and quarantined media
+backend/storage/quarantine/
+
+# Model evaluation caches
+ai-ml/models/**/.eval_results/
+
+# Exclude model binaries by default
+# Retain the checkpoints required by the configured application
+!ai-ml/checkpoints/
+!ai-ml/checkpoints/human_face_efficientnet_b0_best.pt
+!ai-ml/models/aasist_l/
+!ai-ml/models/aasist_l/AASIST-L.pth

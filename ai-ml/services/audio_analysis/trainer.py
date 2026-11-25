@@ -1,6 +1,8 @@
 """
-TruthLens AI/ML — Module 07: Audio Anti-Spoofing Classifier Training Pipeline
-Blueprint: Reproducible training pipeline, dataset discovery, EER (Equal Error Rate) evaluation.
+TruthLens AI/ML — Module 07: Audio Anti-Spoofing Dataset & Evaluation Metrics Utilities
+Provides dataset discovery, Equal Error Rate (EER), and standard classification metric helpers.
+Note: Production audio inference uses the official pretrained AASIST-L checkpoint directly
+without fine-tuning or scratch training.
 """
 
 from __future__ import annotations
@@ -8,18 +10,14 @@ from __future__ import annotations
 from dataclasses import dataclass
 import logging
 from pathlib import Path
-import random
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 import numpy as np
 import torch
-import torch.nn as nn
 from torch.utils.data import DataLoader, Dataset
 
-from config.settings import settings
-from services.audio_analysis.features import compute_mel_spectrogram
-from services.audio_analysis.ingestion import load_and_preprocess_audio
-from services.audio_analysis.model import AASISTAudioClassifier, format_log_mel_tensor
+from services.audio_analysis.ingestion import SUPPORTED_AUDIO_EXTENSIONS, load_and_preprocess_audio
+from services.audio_analysis.model import AASIST_L_INPUT_SAMPLES, pad_or_crop_waveform
 
 logger = logging.getLogger(__name__)
 
@@ -28,27 +26,24 @@ logger = logging.getLogger(__name__)
 class AudioSample:
     """Single audio dataset item with filepath and ground truth binary label."""
     file_path: Path
-    label: int  # 0 = authentic / bonafide, 1 = synthetic / spoof
+    label: int  # 0 = bonafide / authentic, 1 = spoof / synthetic
 
 
 class AudioAuthenticityDataset(Dataset):
     """
-    PyTorch Dataset for audio authenticity classification.
-    Loads audio, resamples to 16 kHz mono, computes log-Mel spectrogram,
-    and returns standardized (1, n_mels, T) tensor with binary label.
+    PyTorch Dataset yielding deterministic 16 kHz mono waveforms of length 64,600
+    for AASIST-L evaluation.
     """
 
     def __init__(
         self,
         samples: List[AudioSample],
         target_sr: int = 16000,
-        n_mels: int = 80,
-        target_frames: int = 128,
+        target_samples: int = AASIST_L_INPUT_SAMPLES,
     ) -> None:
         self.samples = samples
         self.target_sr = target_sr
-        self.n_mels = n_mels
-        self.target_frames = target_frames
+        self.target_samples = target_samples
 
     def __len__(self) -> int:
         return len(self.samples)
@@ -56,68 +51,54 @@ class AudioAuthenticityDataset(Dataset):
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, int]:
         sample = self.samples[idx]
         waveform, _ = load_and_preprocess_audio(sample.file_path, target_sr=self.target_sr)
-        log_mel, _, _, _ = compute_mel_spectrogram(
-            waveform,
-            sr=self.target_sr,
-            n_mels=self.n_mels,
-            n_fft=settings.audio_n_fft,
-            hop_length=settings.audio_hop_length,
-        )
-        # Format to (1, n_mels, target_frames)
-        tensor = format_log_mel_tensor(log_mel, target_frames=self.target_frames)
-        # Squeeze batch dimension to return (1, n_mels, target_frames)
-        return tensor.squeeze(0), sample.label
+        framed = pad_or_crop_waveform(waveform, max_len=self.target_samples)
+        return torch.from_numpy(framed), sample.label
 
     @classmethod
     def from_directory(
         cls,
         root_dir: Path,
         target_sr: int = 16000,
-        n_mels: int = 80,
-        target_frames: int = 128,
+        target_samples: int = AASIST_L_INPUT_SAMPLES,
     ) -> AudioAuthenticityDataset:
         """
         Discover audio files arranged in folder structure:
-            root_dir/authentic/ (*.wav, etc.) -> label 0
-            root_dir/synthetic/ (*.wav, etc.) -> label 1
+            root_dir/authentic/ (or bonafide/) -> label 0
+            root_dir/synthetic/ (or spoof/)    -> label 1
         """
         samples: List[AudioSample] = []
-        auth_dir = root_dir / "authentic"
-        synth_dir = root_dir / "synthetic"
+        auth_dirs = [root_dir / "authentic", root_dir / "bonafide"]
+        synth_dirs = [root_dir / "synthetic", root_dir / "spoof"]
 
-        valid_exts = {".wav", ".mp3", ".flac", ".ogg", ".m4a"}
+        for auth_dir in auth_dirs:
+            if auth_dir.exists():
+                for f in sorted(auth_dir.iterdir()):
+                    if f.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS and f.is_file():
+                        samples.append(AudioSample(file_path=f, label=0))
 
-        if auth_dir.exists():
-            for f in auth_dir.iterdir():
-                if f.suffix.lower() in valid_exts and f.is_file():
-                    samples.append(AudioSample(file_path=f, label=0))
-
-        if synth_dir.exists():
-            for f in synth_dir.iterdir():
-                if f.suffix.lower() in valid_exts and f.is_file():
-                    samples.append(AudioSample(file_path=f, label=1))
+        for synth_dir in synth_dirs:
+            if synth_dir.exists():
+                for f in sorted(synth_dir.iterdir()):
+                    if f.suffix.lower() in SUPPORTED_AUDIO_EXTENSIONS and f.is_file():
+                        samples.append(AudioSample(file_path=f, label=1))
 
         logger.info(
-            "Discovered %d audio samples in %s (authentic: %d, synthetic: %d)",
+            "Discovered %d audio samples in %s (bonafide: %d, spoof: %d)",
             len(samples),
             root_dir,
             sum(1 for s in samples if s.label == 0),
             sum(1 for s in samples if s.label == 1),
         )
-        return cls(samples, target_sr=target_sr, n_mels=n_mels, target_frames=target_frames)
+        return cls(samples, target_sr=target_sr, target_samples=target_samples)
 
 
 def compute_eer(bonafide_scores: np.ndarray, spoof_scores: np.ndarray) -> Tuple[float, float]:
     """
-    Compute Equal Error Rate (EER) and operating threshold where
-    False Rejection Rate (FRR) equals False Acceptance Rate (FAR).
+    Compute Equal Error Rate (EER) and threshold where FRR equals FAR.
 
     Args:
-        bonafide_scores: Predicted spoof probabilities for authentic/bonafide speech.
-        spoof_scores: Predicted spoof probabilities for synthetic/spoofed speech.
-
-    Returns:
-        Tuple[float, float]: (eer, optimal_threshold)
+        bonafide_scores: Predicted spoof probabilities for authentic/bonafide speech (lower = bonafide).
+        spoof_scores: Predicted spoof probabilities for synthetic/spoofed speech (higher = spoof).
     """
     if len(bonafide_scores) == 0 or len(spoof_scores) == 0:
         return 0.0, 0.5
@@ -133,38 +114,33 @@ def compute_eer(bonafide_scores: np.ndarray, spoof_scores: np.ndarray) -> Tuple[
 
 
 def evaluate_audio_classifier(
-    model: nn.Module,
+    model: torch.nn.Module,
     dataloader: DataLoader,
     device: torch.device,
+    threshold: float = 0.5,
 ) -> Dict[str, float]:
     """
-    Evaluate audio classifier on validation set and compute metrics including EER,
-    Accuracy, Precision, Recall, and F1.
+    Evaluate AASIST-L on a dataset yielding (waveform [B, L], label) pairs.
+    Note: AASIST-L logits index 0 = spoof, index 1 = bonafide.
     """
     model.eval()
     all_labels: List[int] = []
-    all_probs: List[float] = []
-    all_preds: List[int] = []
+    all_spoof_probs: List[float] = []
 
-    with torch.no_grad():
+    with torch.inference_mode():
         for inputs, targets in dataloader:
             inputs = inputs.to(device)
             logits = model(inputs)
-            probs = torch.softmax(logits, dim=-1)[:, 1].cpu().numpy()
-            preds = torch.argmax(logits, dim=-1).cpu().numpy()
-
+            probs = torch.softmax(logits, dim=-1)[:, 0].cpu().numpy()
             all_labels.extend(targets.numpy().tolist())
-            all_probs.extend(probs.tolist())
-            all_preds.extend(preds.tolist())
+            all_spoof_probs.extend(probs.tolist())
 
     y_true = np.array(all_labels)
-    y_prob = np.array(all_probs)
-    y_pred = np.array(all_preds)
-
-    total = len(y_true)
-    if total == 0:
+    y_prob = np.array(all_spoof_probs)
+    if len(y_true) == 0:
         return {"accuracy": 0.0, "precision": 0.0, "recall": 0.0, "f1": 0.0, "eer": 0.0}
 
+    y_pred = (y_prob >= threshold).astype(int)
     accuracy = float(np.mean(y_true == y_pred))
 
     tp = float(np.sum((y_true == 1) & (y_pred == 1)))
@@ -186,85 +162,4 @@ def evaluate_audio_classifier(
         "f1": round(f1, 4),
         "eer": eer,
         "eer_threshold": eer_th,
-    }
-
-
-def train_audio_classifier(
-    train_samples: List[AudioSample],
-    val_samples: List[AudioSample],
-    output_checkpoint_path: Path,
-    epochs: int = 5,
-    batch_size: int = 8,
-    lr: float = 1e-4,
-    model_version: str = "1.0.0",
-    device: Optional[torch.device] = None,
-) -> Dict[str, Any]:
-    """
-    Train AASISTAudioClassifier and save reproducible checkpoint with EER and F1 metrics.
-    """
-    if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    train_dataset = AudioAuthenticityDataset(train_samples)
-    val_dataset = AudioAuthenticityDataset(val_samples)
-
-    train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=batch_size, shuffle=False)
-
-    model = AASISTAudioClassifier(n_mels=settings.audio_n_mels)
-    model.to(device)
-
-    criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-
-    best_val_f1 = -1.0
-    best_metrics: Dict[str, float] = {}
-
-    for epoch in range(1, epochs + 1):
-        model.train()
-        running_loss = 0.0
-        for inputs, targets in train_loader:
-            inputs, targets = inputs.to(device), targets.to(device)
-            optimizer.zero_grad()
-            logits = model(inputs)
-            loss = criterion(logits, targets)
-            loss.backward()
-            optimizer.step()
-            running_loss += float(loss.item())
-
-        val_metrics = evaluate_audio_classifier(model, val_loader, device)
-        logger.info(
-            "Epoch %d/%d — Loss: %.4f | Val F1: %.4f | Val Acc: %.4f | Val EER: %.4f",
-            epoch, epochs, running_loss / max(1, len(train_loader)),
-            val_metrics["f1"], val_metrics["accuracy"], val_metrics["eer"],
-        )
-
-        if val_metrics["f1"] > best_val_f1:
-            best_val_f1 = val_metrics["f1"]
-            best_metrics = val_metrics
-
-            output_checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
-            checkpoint_payload = {
-                "model_name": settings.audio_model_name,
-                "model_version": model_version,
-                "architecture": "AASISTAudioClassifier",
-                "n_mels": settings.audio_n_mels,
-                "sample_rate": settings.audio_sample_rate,
-                "state_dict": model.state_dict(),
-                "metrics": best_metrics,
-                "training_config": {
-                    "epochs": epochs,
-                    "batch_size": batch_size,
-                    "lr": lr,
-                    "train_samples": len(train_samples),
-                    "val_samples": len(val_samples),
-                },
-            }
-            torch.save(checkpoint_payload, output_checkpoint_path)
-            logger.info("Saved best checkpoint to %s (Val F1: %.4f, EER: %.4f)", output_checkpoint_path, best_val_f1, best_metrics.get("eer", 0.0))
-
-    return {
-        "best_val_f1": best_val_f1,
-        "best_metrics": best_metrics,
-        "checkpoint_path": str(output_checkpoint_path),
     }

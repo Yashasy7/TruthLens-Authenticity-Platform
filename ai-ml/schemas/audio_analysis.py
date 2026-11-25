@@ -17,6 +17,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class AudioAnalysisStatus(str, Enum):
     """Processing status for audio analysis jobs."""
     COMPLETED = "COMPLETED"
+    MODEL_UNAVAILABLE = "MODEL_UNAVAILABLE"
     FAILED = "FAILED"
 
 
@@ -54,15 +55,20 @@ class BackendAudioAnalysisResponse(BaseModel):
     """
     model_config = ConfigDict(protected_namespaces=())
 
-    synthetic_voice_prob: float = Field(ge=0.0, le=1.0, description="Synthetic voice cloning probability [0.0, 1.0]")
+    synthetic_voice_prob: Optional[float] = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Spoof / synthetic voice probability [0.0, 1.0]; None when model checkpoint is unavailable",
+    )
     spectrogram_url: Optional[str] = Field(default=None, description="Relative URL to saved Mel-spectrogram artifact")
     spectrogram_base64: str = Field(description="Base64-encoded PNG image of the normalized Mel-spectrogram")
     pitch_variance: float = Field(ge=0.0, description="Variance of pitch contour across voiced intervals")
     splice_markers: List[AudioSpliceMarker] = Field(default_factory=list, description="Detected splicing anomaly events")
-    model_name: str = Field(default="TruthLens-AASIST-AudioClassifier", description="Audio anti-spoofing classifier model")
-    model_version: str = Field(default="0.1.0-dev", description="Model weights semantic version")
+    model_name: str = Field(default="AASIST-L (clovaai/aasist)", description="Audio anti-spoofing classifier model")
+    model_version: str = Field(default="1.0.0-aasist-l-asvspoof19la", description="Model weights semantic version")
     evidence: AudioEvidence = Field(description="Granular acoustic evidence metrics")
-    status: str = Field(default="COMPLETED", description="Analysis status: COMPLETED or FAILED")
+    status: str = Field(default="COMPLETED", description="Analysis status: COMPLETED, MODEL_UNAVAILABLE, or FAILED")
 
 
 class AudioAnalysisRequest(BaseModel):
@@ -85,7 +91,7 @@ class LegacyAudioAnalysisResponse(BaseModel):
     Legacy internal response payload for POST /api/audio/analyze.
     """
     media_id: UUID
-    synthetic_voice_prob: float = Field(ge=0.0, le=1.0)
+    synthetic_voice_prob: Optional[float] = Field(default=None, ge=0.0, le=1.0)
     spectrogram_url: Optional[str] = None
     spectrogram_base64: str
     pitch_variance: float = Field(ge=0.0)

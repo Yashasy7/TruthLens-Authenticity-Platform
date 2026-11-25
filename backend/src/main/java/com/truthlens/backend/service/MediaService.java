@@ -1,5 +1,6 @@
 package com.truthlens.backend.service;
 
+import com.truthlens.backend.dto.MediaContentResource;
 import com.truthlens.backend.dto.MediaResponse;
 import com.truthlens.backend.dto.MediaUploadResponse;
 import com.truthlens.backend.entity.AccountStatus;
@@ -198,6 +199,52 @@ public class MediaService {
         }
 
         return toMediaResponse(media);
+    }
+
+    /**
+     * Retrieves an authorized input stream of the quarantined media file along with its MIME type and metadata.
+     *
+     * <p>Enforces the same IDOR and role-based access control as {@link #getMediaById(UUID, String)}.</p>
+     *
+     * @param mediaId          the media's unique identifier
+     * @param currentUserEmail normalized email of the caller
+     * @return safe {@link MediaContentResource}
+     */
+    @Transactional(readOnly = true)
+    public MediaContentResource getMediaContent(UUID mediaId, String currentUserEmail) {
+        if (currentUserEmail == null || currentUserEmail.isBlank()) {
+            throw new AccessDeniedException("Access denied. Authentication required to access media.");
+        }
+
+        Media media = mediaRepository.findById(mediaId)
+                .orElseThrow(() -> new MediaNotFoundException("Media not found with id: " + mediaId));
+
+        User currentUser = userRepository.findByEmail(currentUserEmail)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + currentUserEmail));
+
+        boolean isOwner = media.getUploader().getId().equals(currentUser.getId());
+        boolean isElevated = currentUser.getRoles().stream()
+                .anyMatch(r -> r.getName() == RoleName.ANALYST ||
+                               r.getName() == RoleName.MODERATOR ||
+                               r.getName() == RoleName.ADMIN);
+
+        if (!isOwner && !isElevated) {
+            log.warn("IDOR attempt blocked on content download: User '{}' (id={}) attempted to access media '{}' owned by '{}'",
+                    currentUserEmail, currentUser.getId(), mediaId, media.getUploader().getId());
+            throw new AccessDeniedException("Access denied. You do not have permission to access this media.");
+        }
+
+        if (media.getStoragePath() == null || !storageService.exists(media.getStoragePath())) {
+            throw new MediaNotFoundException("Media content file not found in storage for id: " + mediaId);
+        }
+
+        InputStream inputStream = storageService.load(media.getStoragePath());
+        return new MediaContentResource(
+                inputStream,
+                media.getMimeType(),
+                media.getOriginalFilename(),
+                media.getFileSize()
+        );
     }
 
     /**

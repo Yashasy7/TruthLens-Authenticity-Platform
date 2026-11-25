@@ -107,6 +107,36 @@ class TestAudioIngestion:
         with pytest.raises(ValueError):
             load_and_preprocess_audio(corrupt)
 
+    @pytest.mark.parametrize(
+        "fmt,ext",
+        [
+            ("FLAC", ".flac"),
+            ("OGG", ".ogg"),
+            ("MP3", ".mp3"),
+        ],
+    )
+    def test_supported_container_formats_decode_cleanly(self, fmt: str, ext: str):
+        import io
+        import soundfile as sf
+
+        sr = 16000
+        t = np.linspace(0.0, 0.6, int(sr * 0.6), endpoint=False, dtype=np.float32)
+        sine = (0.3 * np.sin(2.0 * np.pi * 220.0 * t)).astype(np.float32)
+        buf = io.BytesIO()
+        sf.write(buf, sine, sr, format=fmt)
+
+        waveform, metadata = load_and_preprocess_audio(buf.getvalue(), filename=f"clip{ext}")
+        assert metadata.sample_rate == 16000
+        assert metadata.channels == 1
+        assert waveform.ndim == 1
+        assert waveform.size > 0
+
+    @pytest.mark.parametrize("filename", ["clip.m4a", "clip.aac", "clip.mp4", "clip.txt"])
+    def test_unsupported_extensions_are_rejected(self, filename: str):
+        wav_bytes = _create_wav_bytes()
+        with pytest.raises(ValueError, match="Unsupported audio file format"):
+            load_and_preprocess_audio(wav_bytes, filename=filename)
+
     def test_temp_audio_file_cleanup(self):
         wav_bytes = _create_wav_bytes(duration=0.5, sr=16000)
         temp_path = None

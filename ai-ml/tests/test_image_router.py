@@ -24,18 +24,26 @@ os.environ["STORAGE_DIR"] = str(_TMP_DIR)
 os.environ["MODEL_DIR"] = str(_TMP_DIR / "models")
 
 
+from config.settings import settings  # noqa: E402
 from main import app  # noqa: E402 — must be after env override
 from services.image_analysis.classifier import reset_model  # noqa: E402
 
 
+from unittest.mock import MagicMock, patch
+
 @pytest.fixture(scope="module")
 def client():
     """Create a TestClient for the full FastAPI app."""
-    with TestClient(app) as c:
-        yield c
+    with patch("main.get_speech_transcriber", return_value=MagicMock()), \
+         patch("main.get_ocr_engine", return_value=MagicMock()), \
+         patch("main.get_audio_classifier", return_value=MagicMock()), \
+         patch("main.get_syncnet_evaluator", return_value=MagicMock()), \
+         patch("main.get_claim_engine", return_value=MagicMock()):
+        with TestClient(app) as c:
+            yield c
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def reset_classifier():
     reset_model()
     yield
@@ -136,9 +144,11 @@ class TestAnalyzeImageValid:
         ela_url = response.json().get("ela_heatmap_url", "")
         if ela_url:
             full_path = Path(ela_url)
-            assert full_path.exists() or (
-                _TMP_DIR / "ela" / f"{media_id}.png"
-            ).exists(), "ELA heatmap file should exist on disk"
+            assert (
+                full_path.exists()
+                or (_TMP_DIR / "ela" / f"{media_id}.png").exists()
+                or (settings.storage_dir / "ela" / f"{media_id}.png").exists()
+            ), "ELA heatmap file should exist on disk"
 
     def test_processing_time_positive(self, client, sample_image_path):
         media_id = str(uuid.uuid4())

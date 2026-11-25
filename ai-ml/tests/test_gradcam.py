@@ -13,7 +13,7 @@ from services.image_analysis.gradcam import generate_gradcam
 from utils.image_utils import preprocess_for_model
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def reset_singleton():
     reset_model()
     yield
@@ -29,8 +29,8 @@ def _make_image(width=224, height=224) -> Image.Image:
 class TestGenerateGradCAM:
 
     def test_returns_numpy_array(self):
-        """generate_gradcam must return a numpy ndarray."""
-        model = load_model()
+        """generate_gradcam must return a numpy ndarray for CNN architectures."""
+        model = load_model(classifier_type="efficientnet")
         image = _make_image()
         tensor = preprocess_for_model(image)
         result = generate_gradcam(model, tensor, original_size=(224, 224))
@@ -38,7 +38,7 @@ class TestGenerateGradCAM:
 
     def test_output_shape_matches_original_size(self):
         """Output shape should match the requested original_size (H, W, 3)."""
-        model = load_model()
+        model = load_model(classifier_type="efficientnet")
         image = _make_image(width=300, height=200)
         tensor = preprocess_for_model(image)
         result = generate_gradcam(model, tensor, original_size=(300, 200))
@@ -47,7 +47,7 @@ class TestGenerateGradCAM:
 
     def test_output_dtype_uint8(self):
         """Output must be uint8 for PNG storage."""
-        model = load_model()
+        model = load_model(classifier_type="efficientnet")
         image = _make_image()
         tensor = preprocess_for_model(image)
         result = generate_gradcam(model, tensor, original_size=(224, 224))
@@ -55,7 +55,7 @@ class TestGenerateGradCAM:
 
     def test_output_values_in_range(self):
         """All pixel values must be in [0, 255]."""
-        model = load_model()
+        model = load_model(classifier_type="efficientnet")
         image = _make_image()
         tensor = preprocess_for_model(image)
         result = generate_gradcam(model, tensor, original_size=(224, 224))
@@ -63,7 +63,7 @@ class TestGenerateGradCAM:
 
     def test_different_sizes(self):
         """Grad-CAM should resize correctly to different original_size values."""
-        model = load_model()
+        model = load_model(classifier_type="efficientnet")
         image = _make_image()
         tensor = preprocess_for_model(image)
         for w, h in [(100, 100), (640, 480), (50, 75)]:

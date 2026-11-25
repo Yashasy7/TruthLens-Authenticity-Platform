@@ -1,26 +1,24 @@
 import { useMemo, useState } from "react";
-import { Info } from "lucide-react";
-import type {
-  InvestigationReport,
-  ReportStatus,
-} from "../types/report";
+import {
+  Search,
+  Filter,
+  Download,
+  Calendar,
+  ArrowRight,
+  X,
+  CheckCircle2,
+} from "lucide-react";
+import type { InvestigationReport, ReportStatus } from "../types/report";
 import { reportMock } from "../utils/reportMock";
 
-function Reports() {
-  const [reports, setReports] =
-    useState<InvestigationReport[]>(reportMock);
-
-  const [selectedReport, setSelectedReport] =
-    useState<InvestigationReport | null>(null);
-
+export function Reports() {
+  const [reports, setReports] = useState<InvestigationReport[]>(reportMock);
+  const [selectedReport, setSelectedReport] = useState<InvestigationReport | null>(null);
   const [search, setSearch] = useState("");
-
-  const [statusFilter, setStatusFilter] =
-    useState<"all" | ReportStatus>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | ReportStatus>("all");
 
   const filteredReports = useMemo(() => {
     const query = search.trim().toLowerCase();
-
     return reports.filter((report) => {
       const matchesSearch =
         !query ||
@@ -28,675 +26,301 @@ function Reports() {
         report.id.toLowerCase().includes(query) ||
         report.caseId.toLowerCase().includes(query);
 
-      const matchesStatus =
-        statusFilter === "all" ||
-        report.status === statusFilter;
-
+      const matchesStatus = statusFilter === "all" || report.status === statusFilter;
       return matchesSearch && matchesStatus;
     });
   }, [reports, search, statusFilter]);
 
   const handleExport = (reportId: string) => {
     setReports((current) =>
-      current.map((report) =>
-        report.id === reportId
-          ? {
-              ...report,
-              status: "exported",
-            }
-          : report,
-      ),
+      current.map((r) => (r.id === reportId ? { ...r, status: "exported" } : r))
     );
-
-    setSelectedReport((current) =>
-      current?.id === reportId
-        ? {
-            ...current,
-            status: "exported",
-          }
-        : current,
-    );
-  };
-
-  const openLatestReport = () => {
-    if (reports.length > 0) {
-      setSelectedReport(reports[0]);
+    if (selectedReport?.id === reportId) {
+      setSelectedReport((prev) => (prev ? { ...prev, status: "exported" } : null));
     }
   };
 
   return (
-    <div className="reports-page">
-      {/* =================================
-          HEADER
-      ================================= */}
-
-      <header className="reports-header">
+    <div className="reports-page" style={{ maxWidth: "1200px", margin: "0 auto", paddingBottom: "40px" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: "28px", flexWrap: "wrap", gap: "16px" }}>
         <div>
-          <span className="eyebrow">
-            INVESTIGATION REPORTING
+          <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "1.2px", color: "var(--primary)", textTransform: "uppercase" }}>
+            Documentation
           </span>
-
-          <h2>Reports</h2>
-
-          <p>
-            Turn investigation findings into structured,
-            reviewable evidence reports.
+          <h2 style={{ fontSize: "26px", fontWeight: 700, margin: "4px 0 6px", color: "var(--text)" }}>
+            Investigation Reports
+          </h2>
+          <p style={{ margin: 0, fontSize: "14px", color: "var(--text-secondary)" }}>
+            Review structured evidence summaries, authenticity assessments, and export forensic audit trails.
           </p>
         </div>
 
         <button
+          onClick={() => {
+            if (reports.length > 0) setSelectedReport(reports[0]);
+          }}
           className="primary-button"
-          onClick={openLatestReport}
-          disabled={reports.length === 0}
+          style={{ padding: "9px 18px", fontSize: "13px" }}
         >
-          Open Latest Report →
+          View Latest Report →
         </button>
-      </header>
+      </div>
 
+      {/* Search and Filters */}
       <div
         style={{
           display: "flex",
+          justifyContent: "space-between",
           alignItems: "center",
-          gap: "12px",
-          background: "var(--warning-soft)",
-          color: "var(--warning)",
-          padding: "14px 18px",
-          borderRadius: "10px",
-          fontSize: "13px",
-          marginBottom: "20px",
-          border: "1px solid rgba(217, 154, 0, 0.2)",
+          gap: "16px",
+          background: "var(--surface)",
+          border: "1px solid var(--border)",
+          borderRadius: "12px",
+          padding: "12px 16px",
+          marginBottom: "24px",
+          flexWrap: "wrap",
         }}
       >
-        <Info size={18} style={{ flexShrink: 0 }} />
-        <span>
-          <strong>Backend Dependency Status (Module 18):</strong> Report Generation & Export service (PDF/JSON) is not yet implemented in the backend architecture. This interface operates in preview mode.
-        </span>
-      </div>
-
-      {/* =================================
-          STATS
-      ================================= */}
-
-      <div className="report-stats">
-        <ReportStat
-          label="Total Reports"
-          value={reports.length}
-        />
-
-        <ReportStat
-          label="Ready"
-          value={countStatus(reports, "ready")}
-        />
-
-        <ReportStat
-          label="Drafts"
-          value={countStatus(reports, "draft")}
-        />
-
-        <ReportStat
-          label="Exported"
-          value={countStatus(reports, "exported")}
-        />
-      </div>
-
-      {/* =================================
-          TOOLBAR
-      ================================= */}
-
-      <div className="reports-toolbar">
-        <div className="report-search">
-          <span>⌕</span>
-
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: "220px" }}>
+          <Search size={16} style={{ color: "var(--text-muted)" }} />
           <input
+            type="text"
+            placeholder="Search reports by title, ID, or case number..."
             value={search}
-            onChange={(event) =>
-              setSearch(event.target.value)
-            }
-            placeholder="Search reports..."
-          />
-        </div>
-
-        <div className="report-filters">
-          <FilterButton
-            label="All"
-            active={statusFilter === "all"}
-            onClick={() => setStatusFilter("all")}
-          />
-
-          <FilterButton
-            label="Ready"
-            active={statusFilter === "ready"}
-            onClick={() => setStatusFilter("ready")}
-          />
-
-          <FilterButton
-            label="Draft"
-            active={statusFilter === "draft"}
-            onClick={() => setStatusFilter("draft")}
-          />
-
-          <FilterButton
-            label="Exported"
-            active={statusFilter === "exported"}
-            onClick={() =>
-              setStatusFilter("exported")
-            }
-          />
-        </div>
-      </div>
-
-      {/* =================================
-          MAIN WORKSPACE
-      ================================= */}
-
-      <div className="reports-layout">
-        {/* REPORT LIBRARY */}
-
-        <section className="reports-list">
-          <div className="section-title-row">
-            <div>
-              <span className="card-label">
-                REPORT LIBRARY
-              </span>
-
-              <h3>Investigation Reports</h3>
-            </div>
-
-            <span className="evidence-count">
-              {filteredReports.length} shown
-            </span>
-          </div>
-
-          {filteredReports.length === 0 ? (
-            <EmptyReports />
-          ) : (
-            filteredReports.map((report) => (
-              <ReportCard
-                key={report.id}
-                report={report}
-                selected={
-                  selectedReport?.id === report.id
-                }
-                onClick={() =>
-                  setSelectedReport(report)
-                }
-              />
-            ))
-          )}
-        </section>
-
-        {/* REPORT PREVIEW */}
-
-        <section className="report-preview">
-          {selectedReport ? (
-            <ReportPreview
-              report={selectedReport}
-              onExport={handleExport}
-            />
-          ) : (
-            <EmptyReportPreview />
-          )}
-        </section>
-      </div>
-    </div>
-  );
-}
-
-/* =================================
-   REPORT STAT
-================================= */
-
-function ReportStat({
-  label,
-  value,
-}: {
-  label: string;
-  value: number;
-}) {
-  return (
-    <div className="report-stat">
-      <span>{label}</span>
-
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-/* =================================
-   FILTER
-================================= */
-
-function FilterButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      className={
-        active
-          ? "report-filter active"
-          : "report-filter"
-      }
-      onClick={onClick}
-    >
-      {label}
-    </button>
-  );
-}
-
-/* =================================
-   REPORT CARD
-================================= */
-
-function ReportCard({
-  report,
-  selected,
-  onClick,
-}: {
-  report: InvestigationReport;
-  selected: boolean;
-  onClick: () => void;
-}) {
-  const findingCount = report.findings.length;
-
-  return (
-    <button
-      className={
-        selected
-          ? "report-card selected"
-          : "report-card"
-      }
-      onClick={onClick}
-    >
-      <div className="report-card-top">
-        <span className="report-id">
-          {report.id}
-        </span>
-
-        <ReportStatus status={report.status} />
-      </div>
-
-      <h3>{report.title}</h3>
-
-      <div className="report-card-info">
-        <span>{report.caseId}</span>
-
-        <span>
-          {findingCount} finding
-          {findingCount !== 1 ? "s" : ""}
-        </span>
-
-        <span>
-          Risk {report.riskScore}
-        </span>
-      </div>
-
-      <div className="report-card-footer">
-        <span>{report.metadata.generatedAt}</span>
-
-        <span className="report-open">
-          Open →
-        </span>
-      </div>
-    </button>
-  );
-}
-
-/* =================================
-   STATUS
-================================= */
-
-function ReportStatus({
-  status,
-}: {
-  status: ReportStatus;
-}) {
-  return (
-    <span
-      className={`report-status ${status}`}
-    >
-      <span className="report-status-dot" />
-      {status}
-    </span>
-  );
-}
-
-/* =================================
-   REPORT PREVIEW
-================================= */
-
-function ReportPreview({
-  report,
-  onExport,
-}: {
-  report: InvestigationReport;
-  onExport: (reportId: string) => void;
-}) {
-  const highFindings = report.findings.filter(
-    (finding) => finding.severity === "high",
-  ).length;
-
-  const mediumFindings = report.findings.filter(
-    (finding) => finding.severity === "medium",
-  ).length;
-
-  const lowFindings = report.findings.filter(
-    (finding) => finding.severity === "low",
-  ).length;
-
-  return (
-    <div className="report-document">
-      {/* HEADER */}
-
-      <div className="report-preview-header">
-        <div>
-          <span className="report-id">
-            {report.id}
-          </span>
-
-          <h3>{report.title}</h3>
-        </div>
-
-        <ReportStatus status={report.status} />
-      </div>
-
-      {/* METADATA */}
-
-      <div className="report-metadata">
-        <MetadataItem
-          label="CASE"
-          value={report.caseId}
-        />
-
-        <MetadataItem
-          label="GENERATED"
-          value={report.metadata.generatedAt}
-        />
-
-        <MetadataItem
-          label="FINDINGS"
-          value={String(report.findings.length)}
-        />
-      </div>
-
-      {/* RISK */}
-
-      <div className="report-risk">
-        <div className="report-risk-heading">
-          <div>
-            <span className="card-label">
-              INVESTIGATION RISK
-            </span>
-
-            <div className="report-risk-score">
-              {report.riskScore}
-              <span>/100</span>
-            </div>
-          </div>
-
-          <span
-            className={
-              report.riskScore >= 70
-                ? "risk-indicator high"
-                : "risk-indicator medium"
-            }
-          >
-            {report.riskScore >= 70
-              ? "HIGH CONCERN"
-              : "REVIEW"}
-          </span>
-        </div>
-
-        <div className="report-risk-bar">
-          <div
+            onChange={(e) => setSearch(e.target.value)}
             style={{
-              width: `${report.riskScore}%`,
+              border: "none",
+              outline: "none",
+              width: "100%",
+              background: "transparent",
+              fontSize: "14px",
+              color: "var(--text)",
             }}
           />
         </div>
-      </div>
 
-      {/* FINDING SUMMARY */}
-
-      <div className="finding-summary">
-        <FindingSummary
-          label="High"
-          value={highFindings}
-          type="high"
-        />
-
-        <FindingSummary
-          label="Medium"
-          value={mediumFindings}
-          type="medium"
-        />
-
-        <FindingSummary
-          label="Low"
-          value={lowFindings}
-          type="low"
-        />
-      </div>
-
-      {/* EXECUTIVE SUMMARY */}
-
-      <section className="report-section">
-        <span className="card-label">
-          EXECUTIVE FINDINGS
-        </span>
-
-        <h3>Key evidence identified</h3>
-
-        <p>
-          This report summarizes the evidence and
-          findings associated with the investigation.
-          Investigators should review the supporting
-          evidence before making a final determination.
-        </p>
-      </section>
-
-      {/* FINDINGS */}
-
-      <section className="report-section">
-        <div className="report-section-heading">
-          <div>
-            <span className="card-label">
-              FINDINGS
-            </span>
-
-            <h3>Evidence observations</h3>
-          </div>
-
-          <span className="evidence-count">
-            {report.findings.length}
-          </span>
-        </div>
-
-        <div className="findings-list">
-          {report.findings.map((finding) => (
-            <FindingCard
-              key={finding.id}
-              finding={finding}
-            />
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <Filter size={15} style={{ color: "var(--text-muted)" }} />
+          {(["all", "draft", "ready", "exported"] as const).map((status) => (
+            <button
+              key={status}
+              onClick={() => setStatusFilter(status)}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: statusFilter === status ? "1px solid var(--primary)" : "1px solid var(--border)",
+                background: statusFilter === status ? "var(--primary-soft)" : "transparent",
+                color: statusFilter === status ? "var(--primary)" : "var(--text-secondary)",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                textTransform: "capitalize",
+              }}
+            >
+              {status}
+            </button>
           ))}
         </div>
-      </section>
+      </div>
 
-      {/* ACTIONS */}
-
-      <section className="report-section report-actions-section">
-        <div>
-          <span className="card-label">
-            REPORT ACTIONS
-          </span>
-
-          <p>
-            Review the findings before exporting the
-            investigation report.
-          </p>
-        </div>
-
-        <div className="report-actions">
-          <button
-            className="secondary-button"
-            onClick={() => window.print()}
+      {/* Reports Grid */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", gap: "20px" }}>
+        {filteredReports.map((report) => (
+          <div
+            key={report.id}
+            onClick={() => setSelectedReport(report)}
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "14px",
+              padding: "20px",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+              cursor: "pointer",
+              transition: "all 0.15s ease",
+              display: "flex",
+              flexDirection: "column",
+              justifyContent: "space-between",
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.borderColor = "var(--primary)")}
+            onMouseLeave={(e) => (e.currentTarget.style.borderColor = "var(--border)")}
           >
-            Preview / Print
-          </button>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "12px" }}>
+                <span style={{ fontSize: "11px", fontWeight: 700, padding: "3px 8px", borderRadius: "4px", background: "var(--surface-soft)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+                  {report.caseId}
+                </span>
 
-          <button
-            className="primary-button"
-            disabled={
-              report.status === "exported"
-            }
-            onClick={() =>
-              onExport(report.id)
-            }
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: 700,
+                    padding: "3px 8px",
+                    borderRadius: "999px",
+                    background: report.status === "exported" ? "var(--success-soft)" : "var(--surface-soft)",
+                    color: report.status === "exported" ? "var(--success)" : "var(--text-secondary)",
+                  }}
+                >
+                  {report.status.toUpperCase()}
+                </span>
+              </div>
+
+              <h3 style={{ margin: "0 0 6px", fontSize: "16px", fontWeight: 750, color: "var(--text)" }}>
+                {report.title}
+              </h3>
+              <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.5, display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical", overflow: "hidden" }}>
+                {report.summary}
+              </p>
+            </div>
+
+            <div style={{ marginTop: "18px", paddingTop: "14px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "var(--text-muted)" }}>
+                <Calendar size={13} />
+                <span>{report.metadata?.generatedAt || "Recent"}</span>
+              </div>
+
+              <span style={{ fontSize: "12px", fontWeight: 600, color: "var(--primary)", display: "inline-flex", alignItems: "center", gap: "4px" }}>
+                <span>View Details</span>
+                <ArrowRight size={13} />
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Selected Report Modal */}
+      {selectedReport && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            backdropFilter: "blur(4px)",
+            display: "grid",
+            placeItems: "center",
+            padding: "20px",
+            zIndex: 100,
+          }}
+          onClick={() => setSelectedReport(null)}
+        >
+          <div
+            style={{
+              background: "var(--surface)",
+              border: "1px solid var(--border)",
+              borderRadius: "16px",
+              padding: "28px",
+              maxWidth: "680px",
+              width: "100%",
+              maxHeight: "90vh",
+              overflowY: "auto",
+              boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            {report.status === "exported"
-              ? "Exported ✓"
-              : "Export Report →"}
-          </button>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "16px" }}>
+              <div>
+                <span style={{ fontSize: "11px", fontWeight: 700, color: "var(--primary)", textTransform: "uppercase" }}>
+                  {selectedReport.caseId} &bull; {selectedReport.id}
+                </span>
+                <h3 style={{ margin: "4px 0", fontSize: "20px", fontWeight: 750, color: "var(--text)" }}>
+                  {selectedReport.title}
+                </h3>
+                <small style={{ fontSize: "12px", color: "var(--text-muted)" }}>
+                  Generated by {selectedReport.metadata?.generatedBy || "Investigator"} on {selectedReport.metadata?.generatedAt || "Recent"}
+                </small>
+              </div>
+
+              <button
+                onClick={() => setSelectedReport(null)}
+                style={{ background: "transparent", border: "none", color: "var(--text-muted)", cursor: "pointer", padding: "4px" }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Verdict Card */}
+            <div
+              style={{
+                padding: "16px",
+                borderRadius: "10px",
+                background: "var(--surface-soft)",
+                border: "1px solid var(--border)",
+                marginBottom: "20px",
+              }}
+            >
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <small style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>AUTHENTICITY ASSESSMENT</small>
+                  <p style={{ margin: "4px 0 0", fontSize: "16px", fontWeight: 750, color: "var(--text)" }}>
+                    {selectedReport.riskScore >= 70 ? "HIGH RISK (SYNTHETIC DETECTED)" : "LOW RISK (AUTHENTIC)"}
+                  </p>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <small style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase" }}>RISK SCORE</small>
+                  <p style={{ margin: "4px 0 0", fontSize: "20px", fontWeight: 800, color: selectedReport.riskScore >= 70 ? "var(--danger)" : "var(--primary)" }}>
+                    {selectedReport.riskScore}/100
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {/* Summary */}
+            <div style={{ marginBottom: "20px" }}>
+              <h4 style={{ margin: "0 0 8px", fontSize: "14px", fontWeight: 700, color: "var(--text)" }}>Executive Summary</h4>
+              <p style={{ margin: 0, fontSize: "13px", color: "var(--text-secondary)", lineHeight: 1.6 }}>{selectedReport.summary}</p>
+            </div>
+
+            {/* Evidence Checklist */}
+            {selectedReport.findings && selectedReport.findings.length > 0 && (
+              <div style={{ marginBottom: "24px" }}>
+                <h4 style={{ margin: "0 0 10px", fontSize: "14px", fontWeight: 700, color: "var(--text)" }}>Forensic Findings</h4>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {selectedReport.findings.map((finding) => (
+                    <div key={finding.id} style={{ display: "flex", alignItems: "center", gap: "10px", padding: "10px 12px", borderRadius: "8px", background: "var(--surface-soft)", border: "1px solid var(--border)" }}>
+                      <CheckCircle2 size={16} style={{ color: "var(--success)", flexShrink: 0 }} />
+                      <div style={{ flex: 1, fontSize: "13px", color: "var(--text)" }}>
+                        <strong>{finding.title}</strong>: {finding.description}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
+              <button
+                onClick={() => setSelectedReport(null)}
+                style={{ padding: "8px 16px", borderRadius: "8px", border: "1px solid var(--border)", background: "var(--surface-soft)", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}
+              >
+                Close
+              </button>
+
+              <button
+                onClick={() => handleExport(selectedReport.id)}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  padding: "8px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: "var(--primary)",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 650,
+                  cursor: "pointer",
+                }}
+              >
+                <Download size={14} />
+                <span>Export Report (JSON)</span>
+              </button>
+            </div>
+          </div>
         </div>
-      </section>
+      )}
     </div>
   );
-}
-
-/* =================================
-   FINDING CARD
-================================= */
-
-function FindingCard({
-  finding,
-}: {
-  finding: InvestigationReport["findings"][number];
-}) {
-  return (
-    <div className="finding">
-      <div
-        className={`finding-severity ${finding.severity}`}
-      />
-
-      <div className="finding-content">
-        <div className="finding-top">
-          <span>{finding.id}</span>
-
-          <span
-            className={`finding-label ${finding.severity}`}
-          >
-            {finding.severity}
-          </span>
-        </div>
-
-        <strong>{finding.title}</strong>
-
-        <p>{finding.description}</p>
-      </div>
-    </div>
-  );
-}
-
-/* =================================
-   FINDING SUMMARY
-================================= */
-
-function FindingSummary({
-  label,
-  value,
-  type,
-}: {
-  label: string;
-  value: number;
-  type: "high" | "medium" | "low";
-}) {
-  return (
-    <div className="finding-summary-item">
-      <span
-        className={`finding-summary-dot ${type}`}
-      />
-
-      <div>
-        <strong>{value}</strong>
-        <span>{label}</span>
-      </div>
-    </div>
-  );
-}
-
-/* =================================
-   METADATA
-================================= */
-
-function MetadataItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string;
-}) {
-  return (
-    <div className="metadata-item">
-      <span>{label}</span>
-
-      <strong>{value}</strong>
-    </div>
-  );
-}
-
-/* =================================
-   EMPTY STATES
-================================= */
-
-function EmptyReports() {
-  return (
-    <div className="reports-empty">
-      <div className="empty-icon">
-        ⌕
-      </div>
-
-      <h3>No reports found</h3>
-
-      <p>
-        Try changing your search or report filter.
-      </p>
-    </div>
-  );
-}
-
-function EmptyReportPreview() {
-  return (
-    <div className="empty-report">
-      <div className="empty-icon">
-        ▤
-      </div>
-
-      <h3>Select a report</h3>
-
-      <p>
-        Choose an investigation report from the
-        library to inspect its findings.
-      </p>
-    </div>
-  );
-}
-
-/* =================================
-   HELPERS
-================================= */
-
-function countStatus(
-  reports: InvestigationReport[],
-  status: ReportStatus,
-) {
-  return reports.filter(
-    (report) => report.status === status,
-  ).length;
 }
 
 export default Reports;

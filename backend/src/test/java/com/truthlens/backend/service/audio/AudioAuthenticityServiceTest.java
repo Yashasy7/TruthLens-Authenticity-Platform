@@ -200,6 +200,8 @@ class AudioAuthenticityServiceTest {
 
         AudioAnalysis cached = new AudioAnalysis(audioMedia);
         cached.setSyntheticVoiceProb(0.15);
+        cached.setModelName("AASIST-L (clovaai/aasist)");
+        cached.setModelVersion("1.0.0-aasist-l-asvspoof19la");
         cached.setAnalysisStatus(AnalysisStatus.COMPLETED);
         when(audioAnalysisRepository.findByMediaId(audioMediaId)).thenReturn(Optional.of(cached));
 
@@ -207,6 +209,39 @@ class AudioAuthenticityServiceTest {
 
         assertThat(response.syntheticVoiceProb()).isEqualTo(0.15);
         assertThat(response.authenticityAssessment()).isEqualTo("LIKELY_AUTHENTIC_AUDIO");
+    }
+
+    @Test
+    @DisplayName("Safety: unavailable or untrained checkpoint never returns LIKELY_AUTHENTIC_AUDIO")
+    void getAudioAnalysis_untrainedOrUnavailableModel_returnsInconclusive() {
+        when(mediaRepository.findById(audioMediaId)).thenReturn(Optional.of(audioMedia));
+        when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+
+        AudioAnalysis cached = new AudioAnalysis(audioMedia);
+        cached.setSyntheticVoiceProb(0.05);
+        cached.setModelVersion("1.0.0-aasist-l-unavailable");
+        cached.setAnalysisStatus(AnalysisStatus.FAILED);
+        when(audioAnalysisRepository.findByMediaId(audioMediaId)).thenReturn(Optional.of(cached));
+
+        AudioAnalysisResponse response = service.getAudioAnalysis(audioMediaId, owner.getEmail());
+
+        assertThat(response.authenticityAssessment()).isEqualTo("MODEL_UNAVAILABLE_INCONCLUSIVE");
+    }
+
+    @Test
+    @DisplayName("getArtifactStream: streams persisted spectrogram PNG")
+    void getArtifactStream_spectrogram_success() {
+        when(mediaRepository.findById(audioMediaId)).thenReturn(Optional.of(audioMedia));
+        when(userRepository.findByEmail(owner.getEmail())).thenReturn(Optional.of(owner));
+
+        AudioAnalysis analysis = new AudioAnalysis(audioMedia);
+        analysis.setSpectrogramUrl("quarantine/audio/spec.png");
+        when(audioAnalysisRepository.findByMediaId(audioMediaId)).thenReturn(Optional.of(analysis));
+        when(storageService.exists("quarantine/audio/spec.png")).thenReturn(true);
+        when(storageService.load("quarantine/audio/spec.png")).thenReturn(new ByteArrayInputStream(new byte[]{1, 2, 3}));
+
+        var stream = service.getArtifactStream(audioMediaId, "spectrogram", owner.getEmail());
+        assertThat(stream).isNotNull();
     }
 
     @Test

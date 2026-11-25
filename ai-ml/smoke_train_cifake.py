@@ -21,8 +21,8 @@ def collect_samples():
 
     # Confirm these label values match the existing dataset implementation.
     label_map = {
-        "FAKE": 0.0,
-        "REAL": 1.0,
+        "REAL": 0.0,
+        "FAKE": 1.0,
     }
 
     samples = []

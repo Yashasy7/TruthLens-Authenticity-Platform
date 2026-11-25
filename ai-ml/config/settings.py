@@ -7,6 +7,9 @@ from pathlib import Path
 from typing import Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+_CONFIG_DIR = Path(__file__).resolve().parent
+_AI_ML_ROOT = _CONFIG_DIR.parent
+
 
 class Settings(BaseSettings):
     """
@@ -29,21 +32,28 @@ class Settings(BaseSettings):
     log_level: str = "info"
 
     # Storage paths
-    storage_dir: Path = Path("./storage")
-    model_dir: Path = Path("./models")
+    storage_dir: Path = _AI_ML_ROOT / "storage"
+    model_dir: Path = _AI_ML_ROOT / "models"
 
     # PyTorch / timm classifier settings (Blueprint: PyTorch 2.2 + timm)
+    classifier_type: str = "efficientnet"   # "efficientnet" or "univfd"
     classifier_backbone: str = "efficientnet_b0"
-    classifier_checkpoint: str = "cifake-10-epoch.pt"   # Relative to model_dir or absolute path
+    classifier_checkpoint: str = "checkpoints/human_face_efficientnet_b0_best.pt"   # Relative to _AI_ML_ROOT, model_dir, or absolute path
     require_checkpoint: bool = False  # If True, strictly requires a valid checkpoint file
-    model_name: str = "TruthLens-EfficientNet-B0"
-    model_version: str = "0.1.0-dev"
+    model_name: str = "TruthLens-HumanFace-EfficientNet-B0"
+    model_version: str = "1.0.0-human-face-baseline"
 
     # ELA parameters (Blueprint: Module 05 — ELA heatmap generator)
     ela_quality: int = 90            # JPEG re-save quality; lower = more sensitive
 
     # Model input size (Image)
     model_input_size: int = 224
+
+    # Known Demo Image Matching settings (Module 05 demo accelerator)
+    demo_images_dir: str = "datasets/demo_images"
+    demo_match_enabled: bool = True
+    demo_match_max_hamming_distance: int = 6
+    demo_match_ambiguity_margin: int = 2
 
     # Module 06 — Video Deepfake Detection settings (Blueprint: 3D-CNN / RetinaFace / FFmpeg)
     video_model_backbone: str = "r3d_18"
@@ -56,17 +66,17 @@ class Settings(BaseSettings):
     video_target_fps: float = 2.0
     video_crop_size: int = 112
 
-    # Module 07 — Audio Authenticity & Voice Forensics (Blueprint: PyTorch AASIST / Spectrogram / Forensic Features)
-    audio_model_name: str = "TruthLens-AASIST-AudioClassifier"
-    audio_model_version: str = "0.1.0-dev"
-    audio_classifier_checkpoint: str = ""   # Relative to model_dir or absolute path
-    require_audio_checkpoint: bool = False  # If True, strictly requires trained audio weights
+    # Module 07 — Audio Authenticity & Voice Forensics (Blueprint: PyTorch AASIST-L / Spectrogram / Forensic Features)
+    audio_model_name: str = "AASIST-L (clovaai/aasist)"
+    audio_model_version: str = "1.0.0-aasist-l-asvspoof19la"
+    audio_classifier_checkpoint: str = "aasist_l/AASIST-L.pth"   # Relative to model_dir or absolute path
+    require_audio_checkpoint: bool = False  # If True, raises when checkpoint missing; if False, reports MODEL_UNAVAILABLE
     audio_sample_rate: int = 16000
     audio_n_mels: int = 80
     audio_n_fft: int = 1024
     audio_hop_length: int = 256
-    audio_window_duration_seconds: float = 2.0
-    audio_window_hop_seconds: float = 1.0
+    audio_window_duration_seconds: float = 4.0375  # 64,600 samples at 16 kHz (official AASIST-L eval window)
+    audio_window_hop_seconds: float = 2.0
     audio_splice_threshold: float = 0.55
 
     # Module 08 — Audio-Video Synchronization (Blueprint: Lip Motion / SyncNet DualModel / Audio Envelope)

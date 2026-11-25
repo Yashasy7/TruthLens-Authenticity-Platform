@@ -20,6 +20,8 @@ from services.audio_analysis.trainer import (
 )
 from services.image_analysis.trainer import (
     ImageFolderAuthenticityDataset,
+    discover_dataset_splits,
+    limit_samples_by_class,
     train_classifier,
 )
 
@@ -37,11 +39,14 @@ def main() -> None:
     parser.add_argument("--output-dir", type=Path, default=Path("./models"), help="Destination directory for model checkpoints")
     parser.add_argument("--checkpoint-name", type=str, default=None, help="Filename for the saved checkpoint")
     parser.add_argument("--backbone", type=str, default="efficientnet_b0", help="Model backbone architecture (image only)")
+    parser.add_argument("--generators", type=str, default=None, help="Comma-separated generator folder names to train on (e.g. 'midjourney,stable_diffusion_v_1_4' or 'all')")
     parser.add_argument("--epochs", type=int, default=5, help="Number of training epochs")
     parser.add_argument("--batch-size", type=int, default=16, help="Training batch size")
     parser.add_argument("--lr", type=float, default=1e-4, help="Learning rate")
     parser.add_argument("--val-split", type=float, default=0.2, help="Fraction of data reserved for validation (0.0–1.0)")
     parser.add_argument("--unfreeze-backbone", action="store_true", help="Fine-tune entire backbone instead of head only (image)")
+    parser.add_argument("--max-train-samples", type=int, default=None, help="Maximum number of training samples (preserving class balance)")
+    parser.add_argument("--max-val-samples", type=int, default=None, help="Maximum number of validation samples (preserving class balance)")
     parser.add_argument("--model-version", type=str, default="1.0.0", help="Semantic version to stamp into the checkpoint")
 
     args = parser.parse_args()
@@ -93,87 +98,57 @@ def main() -> None:
         ckpt_name = args.checkpoint_name or default_ckpt
         output_path = args.output_dir / ckpt_name
 
-        # Support CIFAKE's train/REAL, train/FAKE structure.
-        train_dir = args.data_dir / "train"
-        test_dir = args.data_dir / "test"
+        generators_list = None
+        if args.generators:
+            generators_list = [g.strip() for g in args.generators.split(",") if g.strip()]
 
-        if train_dir.is_dir():
-            # Use the official training split only.
-            dataset = ImageFolderAuthenticityDataset.from_directory(train_dir)
+        try:
+            train_samples, val_samples, test_paths = discover_dataset_splits(
+                data_dir=args.data_dir,
+                generators=generators_list,
+                val_split=args.val_split,
+            )
+        except (ValueError, FileNotFoundError) as exc:
+            logger.error("Dataset discovery error: %s", exc)
+            sys.exit(1)
 
-            if len(dataset) < 4:
-                logger.error(
-                    "CIFAKE training directory must contain at least "
-                    "4 images (found %d)",
-                    len(dataset),
-                )
-                sys.exit(1)
+        if args.max_train_samples is not None:
+            train_samples = limit_samples_by_class(
+                train_samples, max_samples=args.max_train_samples
+            )
+            logger.info("Limited training samples to %d (max_train_samples=%d)", len(train_samples), args.max_train_samples)
 
-            samples = list(dataset.samples)
-            random.seed(42)
-            random.shuffle(samples)
+        if args.max_val_samples is not None:
+            val_samples = limit_samples_by_class(
+                val_samples, max_samples=args.max_val_samples
+            )
+            logger.info("Limited validation samples to %d (max_val_samples=%d)", len(val_samples), args.max_val_samples)
 
-            val_count = max(1, int(len(samples) * args.val_split))
-
-            if val_count >= len(samples):
-                logger.error(
-                    "Validation split leaves no training images. "
-                    "Reduce --val-split."
-                )
-                sys.exit(1)
-
-            train_samples = samples[val_count:]
-            val_samples = samples[:val_count]
-
-            logger.info(
-                "CIFAKE split: %d training, %d validation; "
-                "official test data remains separate.",
+        if len(train_samples) < 4:
+            logger.error(
+                "Image dataset must contain at least 4 training images (found %d)",
                 len(train_samples),
+            )
+            sys.exit(1)
+
+        if len(val_samples) < 1:
+            logger.error(
+                "Image dataset must contain at least 1 validation image (found %d)",
                 len(val_samples),
             )
+            sys.exit(1)
 
-            if test_dir.is_dir():
-                logger.info(
-                    "Official test directory found at %s; "
-                    "it will not be used for training or validation.",
-                    test_dir,
-                )
+        logger.info(
+            "Image dataset ready: %d training samples, %d validation samples",
+            len(train_samples),
+            len(val_samples),
+        )
 
-        else:
-            # Preserve support for datasets with REAL/FAKE directly
-            # inside --data-dir.
-            dataset = ImageFolderAuthenticityDataset.from_directory(
-                args.data_dir
-            )
-
-            if len(dataset) < 4:
-                logger.error(
-                    "Image dataset must contain at least "
-                    "4 images (found %d)",
-                    len(dataset),
-                )
-                sys.exit(1)
-
-            samples = list(dataset.samples)
-            random.seed(42)
-            random.shuffle(samples)
-
-            val_count = max(1, int(len(samples) * args.val_split))
-
-            if val_count >= len(samples):
-                logger.error(
-                    "Validation split leaves no training images. "
-                    "Reduce --val-split."
-                )
-                sys.exit(1)
-
-            train_samples = samples[val_count:]
-            val_samples = samples[:val_count]
-
+        if test_paths:
             logger.info(
-                "Image dataset split: %d train, %d validation",
-                len(train_samples),
-                len(val_samples),
+                "Official test data found (%d directory/directories); kept completely separate: %s",
+                len(test_paths),
+                [str(p) for p in test_paths],
             )
 
         result = train_classifier(
@@ -186,6 +161,8 @@ def main() -> None:
             lr=args.lr,
             unfreeze_backbone=args.unfreeze_backbone,
             model_version=args.model_version,
+            max_train_samples=args.max_train_samples,
+            max_val_samples=args.max_val_samples,
         )
 
         logger.info(

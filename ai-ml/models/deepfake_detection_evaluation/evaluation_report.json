@@ -1,0 +1,61 @@
+{
+  "model": {
+    "name": "TruthLens-efficientnet_b0",
+    "backbone": "efficientnet_b0",
+    "version": "1.0.0",
+    "checkpoint": "C:\\Users\\Yashas H L\\IdeaProjects\\TruthLens\\TruthLens-Authenticity-Platform\\ai-ml\\models\\deepfake_detection_efficientnet_b0.pt",
+    "checkpoint_epoch": 5
+  },
+  "dataset": {
+    "directory": "C:\\Users\\Yashas H L\\IdeaProjects\\TruthLens\\TruthLens-Authenticity-Platform\\ai-ml\\data\\deepfake_detection\\test",
+    "total_samples": 14000,
+    "class_counts": {
+      "authentic_real_0": 7000,
+      "synthetic_ai_1": 7000
+    }
+  },
+  "metrics": {
+    "threshold": 0.5,
+    "accuracy": 0.8363,
+    "precision": 0.8304,
+    "recall": 0.8451,
+    "f1_score": 0.8377,
+    "macro_f1": 0.8363,
+    "roc_auc": 0.9135
+  },
+  "per_class_metrics": {
+    "authentic_real_0": {
+      "precision": 0.8424,
+      "recall": 0.8274,
+      "f1_score": 0.8348,
+      "support": 7000
+    },
+    "synthetic_ai_1": {
+      "precision": 0.8304,
+      "recall": 0.8451,
+      "f1_score": 0.8377,
+      "support": 7000
+    }
+  },
+  "confusion_matrix": {
+    "tp": 5916,
+    "tn": 5792,
+    "fp": 1208,
+    "fn": 1084,
+    "matrix": [
+      [
+        5792,
+        1208
+      ],
+      [
+        1084,
+        5916
+      ]
+    ],
+    "labels": [
+      "Authentic (0)",
+      "Synthetic (1)"
+    ]
+  },
+  "evaluated_at": "2026-11-06T12:34:30.805073+00:00"
+}

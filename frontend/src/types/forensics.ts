@@ -17,6 +17,16 @@ export interface FingerprintResponse {
   createdAt: string;
 }
 
+export interface DuplicateDetailResponse {
+  mediaId: string;
+  isDuplicate: boolean;
+  matchType: string;
+  similarityScore?: number | null;
+  duplicateOfMediaId?: string | null;
+  duplicateOfFilename?: string | null;
+  detectedAt?: string | null;
+}
+
 export interface DuplicateMatchResponse {
   matchedMediaId: string;
   matchType: 'EXACT' | 'NEAR_DUPLICATE' | 'ACOUSTIC' | 'VISUAL';
@@ -89,6 +99,10 @@ export interface ImageEvidenceDto {
   splicing_detected?: boolean;
   image_width?: number;
   image_height?: number;
+  recognition_source?: string;
+  demo_match?: boolean;
+  demo_match_type?: string | null;
+  demo_match_label?: string | null;
   details?: Record<string, unknown>;
 }
 
@@ -165,21 +179,20 @@ export interface VideoAnalysisResponse {
 
 export interface AudioSpliceMarkerDto {
   timestamp_seconds: number;
-  confidence: number;
-  discontinuity_type: string;
+  score: number;
+  reason: string;
 }
 
 export interface AudioEvidenceDto {
-  spectral_centroid?: number;
+  duration_seconds?: number;
+  pitch_mean?: number;
+  pitch_variance?: number;
   spectral_centroid_mean?: number;
   spectral_bandwidth_mean?: number;
   spectral_rolloff_mean?: number;
-  spectral_flatness?: number;
-  zero_crossing_rate?: number;
   zero_crossing_rate_mean?: number;
   phase_discontinuity_score?: number;
-  f0_mean_hz?: number;
-  f0_std_hz?: number;
+  splice_markers?: AudioSpliceMarkerDto[];
   details?: Record<string, unknown>;
 }
 

@@ -45,8 +45,8 @@ audio_v1_router = APIRouter(
     summary="Analyze audio authenticity & voice forensics (Spring Boot Backend Contract)",
     description=(
         "Primary endpoint invoked by Spring Boot FastApiAudioAiServiceClient. "
-        "Consumes multipart/form-data with binary 'file' field and executes the "
-        "full AASIST / Mel-spectrogram / pitch variance / voice cloning evaluation pipeline."
+        "Consumes multipart/form-data with binary 'file' field (WAV, FLAC, OGG, MP3) and executes the "
+        "AASIST-L anti-spoofing, Mel-spectrogram, pitch variance, phase, and splice analysis pipeline."
     ),
 )
 async def analyze_audio_v1_endpoint(
@@ -144,22 +144,24 @@ def audio_health_check() -> dict:
     GET /api/audio/health
     """
     try:
-        _, metadata = get_audio_classifier()
-        model_ready = True
-        error_msg = None
+        model, metadata = get_audio_classifier()
+        checkpoint_loaded = bool(metadata.get("checkpoint_loaded", False)) and model is not None
+        error_msg = metadata.get("error")
     except Exception as exc:
-        model_ready = False
+        checkpoint_loaded = False
         error_msg = str(exc)
         metadata = {}
 
     return {
-        "status": "healthy" if model_ready else "degraded",
+        "status": "healthy" if checkpoint_loaded else "model_unavailable",
         "module": "07-audio-authenticity",
-        "model_ready": model_ready,
+        "model_ready": checkpoint_loaded,
         "model_name": metadata.get("model_name", settings.audio_model_name),
         "model_version": metadata.get("model_version", settings.audio_model_version),
-        "checkpoint_loaded": metadata.get("checkpoint_loaded", False),
+        "architecture": metadata.get("architecture", "AASIST-L"),
+        "checkpoint_loaded": checkpoint_loaded,
         "require_checkpoint": settings.require_audio_checkpoint,
+        "supported_formats": ["WAV", "FLAC", "OGG", "MP3"],
         "sample_rate": settings.audio_sample_rate,
         "n_mels": settings.audio_n_mels,
         "error": error_msg,

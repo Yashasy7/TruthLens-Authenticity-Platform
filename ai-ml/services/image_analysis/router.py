@@ -65,24 +65,18 @@ def analyze_image_endpoint(request: ImageAnalysisRequest) -> ImageAnalysisRespon
 
     try:
         result = analyze_image(request)
+    except (FileNotFoundError, ValueError) as exc:
+        logger.warning("Invalid image or file not found | media_id=%s: %s", request.media_id, exc)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        ) from exc
     except Exception as exc:
         logger.exception("Unexpected error in image analysis | media_id=%s", request.media_id)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Internal analysis error: {exc}",
         ) from exc
-
-    # If the service returned a FAILED status due to a bad image path/format,
-    # surface it as a 400 so the backend can distinguish user error vs server error.
-    if result.status == AnalysisStatus.FAILED and result.error_message:
-        if any(
-            keyword in (result.error_message or "")
-            for keyword in ("not found", "Unsupported", "Cannot decode", "Failed to open")
-        ):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=result.error_message,
-            )
 
     return result
 

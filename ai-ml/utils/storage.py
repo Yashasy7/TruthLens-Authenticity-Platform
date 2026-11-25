@@ -19,7 +19,7 @@ from config.settings import settings
 
 logger = logging.getLogger(__name__)
 
-ArtifactKind = Literal["ela", "gradcam"]
+ArtifactKind = Literal["ela", "gradcam", "noise", "fft", "copy_move"]
 
 
 def save_heatmap(

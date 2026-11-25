@@ -25,7 +25,7 @@ def client():
         yield c
 
 
-@pytest.fixture(autouse=True)
+@pytest.fixture(scope="module", autouse=True)
 def reset_classifier():
     reset_model()
     yield

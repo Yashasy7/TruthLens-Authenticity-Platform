@@ -105,9 +105,14 @@ def generate_gradcam(
     tensor = image_tensor.clone().requires_grad_(True)
 
     try:
-        output: torch.Tensor = model(tensor)   # (1, 1) sigmoid output
+        output: torch.Tensor = model(tensor)   # (1, 1) sigmoid output or (1, 2) logits
         model.zero_grad()
-        output.backward(torch.ones_like(output))  # backprop synthetic class
+        if output.ndim == 2 and output.shape[1] > 1:
+            # Multi-class: backpropagate the AI-generated / synthetic class (index 1)
+            target = output[:, 1]
+            target.backward(torch.ones_like(target))
+        else:
+            output.backward(torch.ones_like(output))  # backprop synthetic class
 
         if hook.activations is None or hook.gradients is None:
             raise RuntimeError("Grad-CAM hooks did not capture activations/gradients.")

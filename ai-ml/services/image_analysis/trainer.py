@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime
 import logging
 from pathlib import Path
+import random
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import numpy as np
@@ -34,8 +35,8 @@ class ImageFolderAuthenticityDataset(Dataset):
       - synthetic / fake / 1   → Label 1.0 (AI-Generated)
     """
 
-    AUTHENTIC_NAMES = {"authentic", "real", "0", "pristine"}
-    SYNTHETIC_NAMES = {"synthetic", "fake", "1", "ai_generated", "diffusion"}
+    AUTHENTIC_NAMES = {"authentic", "real", "0", "pristine", "nature"}
+    SYNTHETIC_NAMES = {"synthetic", "fake", "1", "ai_generated", "diffusion", "ai"}
 
     def __init__(
         self,
@@ -81,11 +82,224 @@ class ImageFolderAuthenticityDataset(Dataset):
                 continue
 
             for file_path in sorted(subdir.glob("**/*")):
-                if file_path.suffix.lower() in valid_exts:
+                if file_path.is_file() and file_path.suffix.lower() in valid_exts:
                     samples.append((file_path, label))
 
         logger.info("Discovered %d samples in %s", len(samples), data_dir)
         return cls(samples=samples, transform=transform)
+
+
+def discover_dataset_splits(
+    data_dir: Path,
+    generators: Optional[List[str]] = None,
+    val_split: float = 0.2,
+    seed: int = 42,
+) -> Tuple[List[Tuple[Path, float]], List[Tuple[Path, float]], List[Path]]:
+    """
+    Discover training, validation, and test splits from a dataset directory.
+
+    Supports:
+      1. Multi-generator GenImage directory:
+         <data_dir>/<generator>/train/{ai,nature}
+         <data_dir>/<generator>/val/{ai,nature}
+         <data_dir>/<generator>/test/{ai,nature} (optional)
+      2. Single-generator or split-level directory:
+         <data_dir>/train/{ai,nature,real,fake,...}
+         <data_dir>/val/{ai,nature,real,fake,...}
+         <data_dir>/test/{ai,nature,real,fake,...} (optional)
+      3. Flat class-folder directory:
+         <data_dir>/{nature,ai,authentic,synthetic,real,fake,...}
+
+    Official validation data is used directly for validation without random mixing into training.
+    Official test directories are identified, preserved, and kept completely separate.
+    """
+    data_dir = Path(data_dir)
+    train_samples: List[Tuple[Path, float]] = []
+    val_samples: List[Tuple[Path, float]] = []
+    test_paths: List[Path] = []
+
+    has_direct_splits = (
+        (data_dir / "train").is_dir()
+        or (data_dir / "val").is_dir()
+        or (data_dir / "validation").is_dir()
+    )
+
+    generator_dirs: List[Path] = []
+    if generators:
+        clean_gens = [g.strip() for g in generators if g.strip() and g.strip().lower() != "all"]
+        if clean_gens:
+            for g in clean_gens:
+                cand = data_dir / g
+                if cand.is_dir():
+                    generator_dirs.append(cand)
+                else:
+                    raise FileNotFoundError(f"Requested generator directory does not exist: {cand}")
+        else:
+            if not has_direct_splits:
+                generator_dirs = [
+                    p for p in sorted(data_dir.iterdir())
+                    if p.is_dir() and ((p / "train").is_dir() or (p / "val").is_dir() or (p / "validation").is_dir())
+                ]
+    elif not has_direct_splits:
+        generator_dirs = [
+            p for p in sorted(data_dir.iterdir())
+            if p.is_dir() and ((p / "train").is_dir() or (p / "val").is_dir() or (p / "validation").is_dir())
+        ]
+
+    if generator_dirs:
+        logger.info(
+            "Discovered %d generator directory(ies): %s",
+            len(generator_dirs),
+            [g.name for g in generator_dirs],
+        )
+        has_official_val = False
+
+        for gen_dir in generator_dirs:
+            t_dir = gen_dir / "train"
+            v_dir = gen_dir / "val" if (gen_dir / "val").is_dir() else (gen_dir / "validation")
+            tst_dir = gen_dir / "test"
+
+            if tst_dir.is_dir():
+                test_paths.append(tst_dir)
+
+            if t_dir.is_dir():
+                t_dataset = ImageFolderAuthenticityDataset.from_directory(t_dir)
+                train_samples.extend(t_dataset.samples)
+
+            if v_dir.is_dir():
+                v_dataset = ImageFolderAuthenticityDataset.from_directory(v_dir)
+                val_samples.extend(v_dataset.samples)
+                has_official_val = True
+
+        if (data_dir / "test").is_dir():
+            test_paths.append(data_dir / "test")
+
+        if not has_official_val:
+            if len(train_samples) < 4:
+                raise ValueError(
+                    f"Insufficient training samples found across generators: {len(train_samples)}"
+                )
+            rng = random.Random(seed)
+            shuffled = list(train_samples)
+            rng.shuffle(shuffled)
+            val_count = max(1, int(len(shuffled) * val_split))
+            if val_count >= len(shuffled):
+                raise ValueError("Validation split leaves no training images.")
+            train_samples = shuffled[val_count:]
+            val_samples = shuffled[:val_count]
+        else:
+            logger.info(
+                "Using official validation splits across generators without mixing (%d train, %d val).",
+                len(train_samples),
+                len(val_samples),
+            )
+
+    elif has_direct_splits:
+        t_dir = data_dir / "train"
+        v_dir = data_dir / "val" if (data_dir / "val").is_dir() else (data_dir / "validation")
+        tst_dir = data_dir / "test"
+
+        if tst_dir.is_dir():
+            test_paths.append(tst_dir)
+
+        if v_dir.is_dir():
+            if t_dir.is_dir():
+                train_samples.extend(ImageFolderAuthenticityDataset.from_directory(t_dir).samples)
+            val_samples.extend(ImageFolderAuthenticityDataset.from_directory(v_dir).samples)
+            logger.info(
+                "Using official validation split from %s without mixing (%d train, %d val).",
+                v_dir,
+                len(train_samples),
+                len(val_samples),
+            )
+        elif t_dir.is_dir():
+            dataset = ImageFolderAuthenticityDataset.from_directory(t_dir)
+            if len(dataset) < 4:
+                raise ValueError(
+                    f"Training directory must contain at least 4 images (found {len(dataset)})"
+                )
+            rng = random.Random(seed)
+            shuffled = list(dataset.samples)
+            rng.shuffle(shuffled)
+            val_count = max(1, int(len(shuffled) * val_split))
+            if val_count >= len(shuffled):
+                raise ValueError("Validation split leaves no training images.")
+            train_samples = shuffled[val_count:]
+            val_samples = shuffled[:val_count]
+
+    else:
+        dataset = ImageFolderAuthenticityDataset.from_directory(data_dir)
+        if len(dataset) < 4:
+            raise ValueError(f"Dataset must contain at least 4 images (found {len(dataset)})")
+        rng = random.Random(seed)
+        shuffled = list(dataset.samples)
+        rng.shuffle(shuffled)
+        val_count = max(1, int(len(shuffled) * val_split))
+        if val_count >= len(shuffled):
+            raise ValueError("Validation split leaves no training images.")
+        train_samples = shuffled[val_count:]
+        val_samples = shuffled[:val_count]
+
+    return train_samples, val_samples, test_paths
+
+
+def limit_samples_by_class(
+    samples: List[Tuple[Path, float]],
+    max_samples: Optional[int] = None,
+    seed: int = 42,
+) -> List[Tuple[Path, float]]:
+    """
+    Subsample a list of (image_path, label) tuples up to max_samples while preserving
+    class balance as closely as possible.
+
+    Args:
+        samples: List of (Path, float) tuples.
+        max_samples: Maximum number of samples to retain. If None or >= len(samples),
+                     the original list is returned unchanged.
+        seed: Random seed for deterministic shuffling within each class.
+
+    Returns:
+        Subsampled list of (Path, float) tuples.
+    """
+    if max_samples is None or max_samples >= len(samples):
+        return samples
+    if max_samples <= 0:
+        return []
+
+    by_class: Dict[float, List[Tuple[Path, float]]] = {}
+    for item in samples:
+        by_class.setdefault(item[1], []).append(item)
+
+    rng = random.Random(seed)
+    shuffled_by_class: Dict[float, List[Tuple[Path, float]]] = {}
+    for label in sorted(by_class.keys()):
+        cls_list = list(by_class[label])
+        cls_list.sort(key=lambda x: str(x[0]))
+        rng.shuffle(cls_list)
+        shuffled_by_class[label] = cls_list
+
+    allocated: Dict[float, List[Tuple[Path, float]]] = {label: [] for label in shuffled_by_class}
+    classes = sorted(shuffled_by_class.keys())
+
+    total_allocated = 0
+    while total_allocated < max_samples:
+        allocated_in_round = 0
+        for label in classes:
+            if total_allocated >= max_samples:
+                break
+            if len(allocated[label]) < len(shuffled_by_class[label]):
+                allocated[label].append(shuffled_by_class[label][len(allocated[label])])
+                total_allocated += 1
+                allocated_in_round += 1
+        if allocated_in_round == 0:
+            break
+
+    result: List[Tuple[Path, float]] = []
+    for label in classes:
+        result.extend(allocated[label])
+
+    rng.shuffle(result)
+    return result
 
 
 def get_transforms(input_size: int = 224) -> Tuple[Callable, Callable]:
@@ -173,6 +387,18 @@ def compute_metrics(
     }
 
 
+def set_model_train_mode(model: nn.Module, unfreeze_backbone: bool) -> None:
+    """
+    Set model to training mode while ensuring frozen BatchNorm layers
+    remain in evaluation mode when unfreeze_backbone is False.
+    """
+    model.train()
+    if not unfreeze_backbone:
+        for module in model.modules():
+            if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                module.eval()
+
+
 def train_classifier(
     train_samples: List[Tuple[Path, float]],
     val_samples: List[Tuple[Path, float]],
@@ -184,6 +410,8 @@ def train_classifier(
     unfreeze_backbone: bool = False,
     device: Optional[torch.device] = None,
     model_version: str = "1.0.0",
+    max_train_samples: Optional[int] = None,
+    max_val_samples: Optional[int] = None,
 ) -> Dict[str, Any]:
     """
     Fine-tune the binary classification model and save checkpoint.
@@ -199,10 +427,16 @@ def train_classifier(
         unfreeze_backbone: If False, only the binary classification head is trained.
         device: Device override (defaults to cuda if available, else cpu).
         model_version: Semantic version string for metadata.
+        max_train_samples: Optional upper bound on training samples (preserving class balance).
+        max_val_samples: Optional upper bound on validation samples (preserving class balance).
 
     Returns:
         Dictionary of training and final validation metrics.
     """
+    if max_train_samples is not None:
+        train_samples = limit_samples_by_class(train_samples, max_samples=max_train_samples)
+    if max_val_samples is not None:
+        val_samples = limit_samples_by_class(val_samples, max_samples=max_val_samples)
     if device is not None:
         dev = device
     elif torch.cuda.is_available():
@@ -231,6 +465,10 @@ def train_classifier(
             param.requires_grad = False
         for param in model.head.parameters():
             param.requires_grad = True
+        # Ensure all frozen BatchNorm layers are set to eval mode
+        for module in model.modules():
+            if isinstance(module, torch.nn.modules.batchnorm._BatchNorm):
+                module.eval()
 
     model.to(dev)
 
@@ -245,7 +483,7 @@ def train_classifier(
     history: List[Dict[str, Any]] = []
 
     for epoch in range(1, epochs + 1):
-        model.train()
+        set_model_train_mode(model, unfreeze_backbone)
         running_loss = 0.0
 
         for images, targets in train_loader:

@@ -23,10 +23,12 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
 import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -39,6 +41,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -233,5 +236,22 @@ class AudioAnalysisControllerTest {
         mockMvc.perform(get("/api/media/" + mediaId + "/audio-analysis")
                         .header(HttpHeaders.AUTHORIZATION, token))
                 .andExpect(status().isBadGateway());
+    }
+
+    @Test
+    @DisplayName("GET /api/media/{id}/audio-analysis/artifacts/spectrogram: streams PNG spectrogram artifact")
+    void getArtifact_spectrogram_returns200ImagePng() throws Exception {
+        UUID mediaId = UUID.randomUUID();
+        String token = createBearerToken("user@truthlens.org", RoleName.USER);
+        byte[] fakePng = new byte[]{(byte) 137, 80, 78, 71, 13, 10, 26, 10};
+
+        when(audioAuthenticityService.getArtifactStream(eq(mediaId), eq("spectrogram"), any()))
+                .thenReturn(new ByteArrayInputStream(fakePng));
+
+        mockMvc.perform(get("/api/media/" + mediaId + "/audio-analysis/artifacts/spectrogram")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(content().contentType(MediaType.IMAGE_PNG))
+                .andExpect(content().bytes(fakePng));
     }
 }

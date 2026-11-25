@@ -4,6 +4,9 @@ import com.truthlens.backend.dto.AudioAnalysisResponse;
 import com.truthlens.backend.dto.AudioEvidenceDto;
 import com.truthlens.backend.dto.AudioSpliceMarkerDto;
 import com.truthlens.backend.service.audio.AudioAuthenticityService;
+import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -12,6 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.io.InputStream;
 import java.util.List;
 import java.util.UUID;
 
@@ -91,5 +95,25 @@ public class AudioAnalysisController {
         String userEmail = authentication.getName();
         List<AudioSpliceMarkerDto> markers = audioAuthenticityService.getSpliceMarkers(id, userEmail);
         return ResponseEntity.ok(markers);
+    }
+
+    /**
+     * Streams the stored Mel-spectrogram PNG artifact for an audio asset.
+     *
+     * @param id             UUID of the media asset
+     * @param type           artifact type: "spectrogram"
+     * @param authentication authenticated caller context
+     * @return HTTP 200 OK with PNG image stream
+     */
+    @GetMapping(value = "/artifacts/{type}", produces = MediaType.IMAGE_PNG_VALUE)
+    public ResponseEntity<Resource> getArtifact(
+            @PathVariable("id") UUID id,
+            @PathVariable("type") String type,
+            Authentication authentication) {
+        String userEmail = authentication.getName();
+        InputStream is = audioAuthenticityService.getArtifactStream(id, type, userEmail);
+        return ResponseEntity.ok()
+                .contentType(MediaType.IMAGE_PNG)
+                .body(new InputStreamResource(is));
     }
 }

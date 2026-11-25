@@ -1,6 +1,12 @@
 """
-TruthLens AI/ML — Module 07: Audio Anti-Spoofing Classifier
-Blueprint: AASIST-style audio anti-spoofing classifier, strict checkpoint enforcement, eval mode.
+TruthLens AI/ML — Module 07: Official AASIST-L Audio Anti-Spoofing Classifier
+Architecture: clovaai/aasist (Jung et al., ICASSP 2022) — Lightweight variant (AASIST-L, 85,306 params).
+Checkpoint: SpeechAntiSpoofingBenchmarks/AASIST-L (ASVspoof2019 LA pretrained).
+
+Class orientation verified from official clovaai/aasist & SpeechAntiSpoofingBenchmarks/AASIST-L:
+  - logits[:, 0] -> spoof / synthetic speech
+  - logits[:, 1] -> bona fide / authentic speech
+  - softmax(logits, dim=-1)[:, 0] -> synthetic_voice_prob in [0.0, 1.0]
 """
 
 from __future__ import annotations
@@ -14,228 +20,236 @@ import torch
 import torch.nn as nn
 
 from config.settings import settings
+from services.audio_analysis.aasist_net import Model as OfficialAASISTNet
 
 logger = logging.getLogger(__name__)
 
-# Cached model instance and metadata
-_CACHED_AUDIO_MODEL: Optional[AASISTAudioClassifier] = None
+# Official clovaai/aasist AASIST-L configuration (config/AASIST-L.conf)
+AASIST_L_INPUT_SAMPLES: int = 64600
+AASIST_L_CONFIG: Dict[str, Any] = {
+    "architecture": "AASIST",
+    "nb_samp": AASIST_L_INPUT_SAMPLES,
+    "first_conv": 128,
+    "filts": [70, [1, 32], [32, 32], [32, 24], [24, 24]],
+    "gat_dims": [24, 32],
+    "pool_ratios": [0.4, 0.5, 0.7, 0.5],
+    "temperatures": [2.0, 2.0, 100.0, 100.0],
+}
+
+# Module-level cached classifier singleton
+_CACHED_AUDIO_MODEL: Optional[AASISTLClassifier] = None
 _CACHED_MODEL_METADATA: Dict[str, Any] = {}
 
 
-class AASISTAudioClassifier(nn.Module):
+class AASISTLClassifier(nn.Module):
     """
-    AASIST-inspired Spectro-Temporal Neural Network for synthetic speech and voice clone detection.
-    Combines 2D convolutional spectro-temporal feature extraction with bidirectional recurrent
-    temporal context aggregation and a binary anti-spoofing classification head.
+    Wrapper around the official clovaai/aasist Model configured for AASIST-L.
+    Operates directly on 16 kHz mono raw waveforms of shape (B, 64600).
     """
 
-    def __init__(self, n_mels: int = 80, embedding_dim: int = 128) -> None:
+    def __init__(self, d_args: Optional[Dict[str, Any]] = None) -> None:
         super().__init__()
-        self.n_mels = n_mels
-        self.embedding_dim = embedding_dim
-
-        # 2D Spectro-Temporal Convolutional Front-End
-        self.conv = nn.Sequential(
-            nn.Conv2d(1, 32, kernel_size=5, padding=2),
-            nn.BatchNorm2d(32),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            nn.Conv2d(32, 64, kernel_size=3, padding=1),
-            nn.BatchNorm2d(64),
-            nn.ReLU(inplace=True),
-            nn.MaxPool2d(2, 2),
-            nn.Conv2d(64, 128, kernel_size=3, padding=1),
-            nn.BatchNorm2d(128),
-            nn.ReLU(inplace=True),
-            nn.AdaptiveAvgPool2d((10, None)),
-        )
-
-        # Bi-directional Temporal Context Aggregator
-        self.gru = nn.GRU(
-            input_size=128 * 10,
-            hidden_size=embedding_dim,
-            num_layers=2,
-            batch_first=True,
-            bidirectional=True,
-        )
-
-        # Classification Head: [0 = Authentic/Bonafide, 1 = Synthetic/Spoof]
-        self.classifier = nn.Sequential(
-            nn.Linear(embedding_dim * 2, 64),
-            nn.BatchNorm1d(64),
-            nn.ReLU(inplace=True),
-            nn.Dropout(0.3),
-            nn.Linear(64, 2),
-        )
+        self.d_args = d_args or dict(AASIST_L_CONFIG)
+        self.net = OfficialAASISTNet(self.d_args)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass.
-        Args:
-            x: Input tensor of shape (B, 1, n_mels, T).
-        Returns:
-            torch.Tensor: Logits of shape (B, 2).
+        Forward pass returning raw class logits of shape (B, 2):
+          index 0 = spoof, index 1 = bona fide.
         """
-        feat = self.conv(x)  # (B, 128, 10, T')
-        b, c, h, w = feat.shape
-        # Flatten spatial (channels * height) and permute to (B, T', C*H)
-        feat = feat.permute(0, 3, 1, 2).reshape(b, w, c * h)
-        out, _ = self.gru(feat)  # (B, T', 2 * embedding_dim)
-        # Temporal mean pooling
-        pooled = torch.mean(out, dim=1)  # (B, 2 * embedding_dim)
-        logits = self.classifier(pooled)
+        if x.dim() == 3 and x.size(1) == 1:
+            x = x.squeeze(1)
+        elif x.dim() == 1:
+            x = x.unsqueeze(0)
+        _last_hidden, logits = self.net(x)
         return logits
 
 
-def format_log_mel_tensor(
-    log_mel: np.ndarray,
-    target_frames: int = 128,
-) -> torch.Tensor:
+def pad_or_crop_waveform(
+    waveform: np.ndarray,
+    max_len: int = AASIST_L_INPUT_SAMPLES,
+) -> np.ndarray:
     """
-    Format and normalize a 2D log-Mel spectrogram for classifier inference.
-    Pads or crops the time dimension to target_frames, standardizes values.
-
-    Args:
-        log_mel: 2D array of shape (n_mels, time_frames).
-        target_frames: Fixed temporal frame length.
-
-    Returns:
-        torch.Tensor: Tensor of shape (1, 1, n_mels, target_frames).
+    Deterministic AASIST-L input framing matching clovaai/aasist data_utils.pad():
+      - If len >= max_len: take the first max_len samples (no random crop).
+      - If 0 < len < max_len: tile-repeat deterministically up to max_len.
     """
-    n_mels, time_frames = log_mel.shape
+    arr = np.asarray(waveform, dtype=np.float32).reshape(-1)
+    n = arr.shape[0]
+    if n == 0:
+        raise ValueError("Cannot frame an empty waveform (0 samples).")
+    if n >= max_len:
+        return arr[:max_len].astype(np.float32)
+    reps = max_len // n + 1
+    return np.tile(arr, reps)[:max_len].astype(np.float32)
 
-    if time_frames < target_frames:
-        pad_width = target_frames - time_frames
-        padded = np.pad(log_mel, ((0, 0), (0, pad_width)), mode="edge")
-    elif time_frames > target_frames:
-        padded = log_mel[:, :target_frames]
-    else:
-        padded = log_mel
 
-    # Standardization: zero mean, unit variance
-    mean = np.mean(padded)
-    std = np.std(padded) + 1e-6
-    normalized = (padded - mean) / std
-
-    tensor = torch.from_numpy(normalized.astype(np.float32)).unsqueeze(0).unsqueeze(0)
-    return tensor
+def _resolve_checkpoint_path(checkpoint_path: str) -> Optional[Path]:
+    if not checkpoint_path:
+        return None
+    p = Path(checkpoint_path)
+    if p.is_absolute() and p.exists():
+        return p
+    rel_model_dir = settings.model_dir / checkpoint_path
+    if rel_model_dir.exists():
+        return rel_model_dir
+    rel_ai_ml = Path("ai-ml/models") / checkpoint_path
+    if rel_ai_ml.exists():
+        return rel_ai_ml
+    if p.exists():
+        return p
+    return None
 
 
 def load_audio_classifier(
     checkpoint_path: Optional[str] = None,
     require_checkpoint: Optional[bool] = None,
     device: Optional[torch.device] = None,
-) -> Tuple[AASISTAudioClassifier, Dict[str, Any]]:
+) -> Tuple[Optional[AASISTLClassifier], Dict[str, Any]]:
     """
-    Initialize AASISTAudioClassifier and load weights from checkpoint if available.
-    Enforces strict failure when require_checkpoint is enabled and checkpoint is missing.
+    Initialize AASIST-L and strictly load pretrained weights on CPU (or target device).
 
-    Args:
-        checkpoint_path: Path to checkpoint file, defaults to settings.audio_classifier_checkpoint.
-        require_checkpoint: Whether to enforce checkpoint existence, defaults to settings.require_audio_checkpoint.
-        device: Target execution device.
-
-    Returns:
-        Tuple[AASISTAudioClassifier, Dict[str, Any]]: Model and associated metadata dict.
+    Never returns an untrained network as an active classifier:
+      - If checkpoint is missing/invalid and require_checkpoint=True -> raises FileNotFoundError/RuntimeError.
+      - If checkpoint is missing/invalid and require_checkpoint=False -> returns (None, metadata) with
+        checkpoint_loaded=False so downstream inference explicitly reports MODEL_UNAVAILABLE / Inconclusive.
     """
     if checkpoint_path is None:
         checkpoint_path = settings.audio_classifier_checkpoint
     if require_checkpoint is None:
         require_checkpoint = settings.require_audio_checkpoint
     if device is None:
-        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    model = AASISTAudioClassifier(n_mels=settings.audio_n_mels)
-    model.to(device)
-    model.eval()
+        device = torch.device("cpu")
 
     metadata: Dict[str, Any] = {
         "model_name": settings.audio_model_name,
         "model_version": settings.audio_model_version,
-        "architecture": "AASISTAudioClassifier",
+        "architecture": "AASIST-L",
         "checkpoint_loaded": False,
         "checkpoint_path": None,
+        "parameter_count": 0,
+        "class_mapping": {"0": "spoof", "1": "bonafide"},
+        "error": None,
     }
 
-    resolved_path: Optional[Path] = None
-    if checkpoint_path:
-        p = Path(checkpoint_path)
-        if p.is_absolute() and p.exists():
-            resolved_path = p
-        else:
-            rel = settings.model_dir / checkpoint_path
-            if rel.exists():
-                resolved_path = rel
-            elif p.exists():
-                resolved_path = p
-
-    if resolved_path and resolved_path.exists():
-        logger.info("Loading audio classifier checkpoint from %s", resolved_path)
-        ckpt = torch.load(resolved_path, map_location=device)
-        if isinstance(ckpt, dict) and "state_dict" in ckpt:
-            model.load_state_dict(ckpt["state_dict"])
-            metadata["checkpoint_loaded"] = True
-            metadata["checkpoint_path"] = str(resolved_path)
-            metadata["model_version"] = ckpt.get("model_version", settings.audio_model_version)
-            metadata["model_name"] = ckpt.get("model_name", settings.audio_model_name)
-        elif isinstance(ckpt, dict):
-            model.load_state_dict(ckpt)
-            metadata["checkpoint_loaded"] = True
-            metadata["checkpoint_path"] = str(resolved_path)
-        else:
-            raise ValueError(f"Invalid checkpoint format in {resolved_path}")
-        logger.info("Audio classifier checkpoint successfully loaded: %s (v%s)", metadata["model_name"], metadata["model_version"])
-    else:
+    resolved_path = _resolve_checkpoint_path(checkpoint_path)
+    if resolved_path is None or not resolved_path.exists():
+        msg = (
+            f"AASIST-L checkpoint '{checkpoint_path}' was not found in {settings.model_dir}."
+        )
+        metadata["model_version"] = f"{settings.audio_model_version}-unavailable"
+        metadata["error"] = msg
         if require_checkpoint:
-            msg = (
-                f"Production checkpoint required (require_audio_checkpoint=True) "
-                f"but checkpoint '{checkpoint_path}' was not found in {settings.model_dir}."
-            )
             logger.error(msg)
             raise FileNotFoundError(msg)
+        logger.warning("%s Audio anti-spoofing classifier will report MODEL_UNAVAILABLE.", msg)
+        return None, metadata
 
-        metadata["model_version"] = f"{settings.audio_model_version}-untrained"
-        logger.warning(
-            "TruthLens Audio Classifier operating in DEVELOPMENT mode with an UNTRAINED architecture. "
-            "No production weights are loaded. (model_version=%s)", metadata["model_version"]
+    try:
+        model = AASISTLClassifier(AASIST_L_CONFIG)
+        raw_ckpt = torch.load(str(resolved_path), map_location="cpu")
+        if isinstance(raw_ckpt, dict) and "state_dict" in raw_ckpt:
+            state_dict = raw_ckpt["state_dict"]
+        elif isinstance(raw_ckpt, dict) and "model_state_dict" in raw_ckpt:
+            state_dict = raw_ckpt["model_state_dict"]
+        elif isinstance(raw_ckpt, dict):
+            state_dict = raw_ckpt
+        else:
+            raise ValueError(f"Unsupported checkpoint payload type in {resolved_path}: {type(raw_ckpt)}")
+
+        # Strip optional DataParallel 'module.' prefix if present
+        cleaned_state = {
+            (k[7:] if k.startswith("module.") else k): v
+            for k, v in state_dict.items()
+        }
+        model.net.load_state_dict(cleaned_state, strict=True)
+        model.to(device)
+        model.eval()
+        for param in model.parameters():
+            param.requires_grad_(False)
+
+        metadata["checkpoint_loaded"] = True
+        metadata["checkpoint_path"] = str(resolved_path)
+        metadata["parameter_count"] = sum(p.numel() for p in model.parameters())
+        logger.info(
+            "Loaded AASIST-L checkpoint (%d params) from %s on %s",
+            metadata["parameter_count"],
+            resolved_path,
+            device,
         )
+        return model, metadata
 
-    return model, metadata
+    except Exception as exc:
+        msg = f"Failed to load AASIST-L checkpoint from {resolved_path}: {exc}"
+        metadata["model_version"] = f"{settings.audio_model_version}-unavailable"
+        metadata["error"] = msg
+        if require_checkpoint:
+            logger.error(msg)
+            raise RuntimeError(msg) from exc
+        logger.warning("%s Audio anti-spoofing classifier will report MODEL_UNAVAILABLE.", msg)
+        return None, metadata
 
 
-def get_audio_classifier() -> Tuple[AASISTAudioClassifier, Dict[str, Any]]:
-    """Get or initialize singleton cached instance of AASISTAudioClassifier."""
+def get_audio_classifier() -> Tuple[Optional[AASISTLClassifier], Dict[str, Any]]:
+    """Get or initialize singleton cached instance of AASISTLClassifier."""
     global _CACHED_AUDIO_MODEL, _CACHED_MODEL_METADATA
-    if _CACHED_AUDIO_MODEL is None:
+    if not _CACHED_MODEL_METADATA:
         _CACHED_AUDIO_MODEL, _CACHED_MODEL_METADATA = load_audio_classifier()
     return _CACHED_AUDIO_MODEL, _CACHED_MODEL_METADATA
 
 
+def reset_audio_model() -> None:
+    """Reset the cached audio classifier singleton (for test isolation)."""
+    global _CACHED_AUDIO_MODEL, _CACHED_MODEL_METADATA
+    _CACHED_AUDIO_MODEL = None
+    _CACHED_MODEL_METADATA = {}
+
+
 def predict_synthetic_voice_probability(
-    log_mel_tensor: torch.Tensor,
-    model: Optional[AASISTAudioClassifier] = None,
+    waveform_or_tensor: np.ndarray | torch.Tensor,
+    model: Optional[AASISTLClassifier] = None,
 ) -> float:
     """
-    Run forward inference with torch.no_grad() and compute synthetic voice probability.
+    Run CPU no-grad AASIST-L inference on a 16 kHz mono waveform and return
+    spoof / synthetic voice probability in [0.0, 1.0].
 
-    Args:
-        log_mel_tensor: 4D tensor (B, 1, n_mels, T).
-        model: Optional pre-loaded classifier; otherwise uses cached singleton.
-
-    Returns:
-        float: Probability [0.0, 1.0] that speech is synthetic / cloned.
+    Note on class orientation:
+      Official AASIST-L outputs logits where index 0 = spoof and index 1 = bona fide.
+      Therefore synthetic_voice_prob = softmax(logits, dim=-1)[0, 0].
     """
     if model is None:
-        model, _ = get_audio_classifier()
+        model, meta = get_audio_classifier()
+        if model is None or not meta.get("checkpoint_loaded", False):
+            raise RuntimeError(
+                meta.get("error") or "AASIST-L checkpoint is unavailable; cannot compute spoof probability."
+            )
+
+    if isinstance(waveform_or_tensor, np.ndarray):
+        framed = pad_or_crop_waveform(waveform_or_tensor, AASIST_L_INPUT_SAMPLES)
+        tensor = torch.from_numpy(framed).unsqueeze(0)
+    elif isinstance(waveform_or_tensor, torch.Tensor):
+        tensor = waveform_or_tensor.detach().float()
+        if tensor.dim() == 1:
+            if tensor.numel() != AASIST_L_INPUT_SAMPLES:
+                framed = pad_or_crop_waveform(tensor.cpu().numpy(), AASIST_L_INPUT_SAMPLES)
+                tensor = torch.from_numpy(framed).unsqueeze(0)
+            else:
+                tensor = tensor.unsqueeze(0)
+        elif tensor.dim() == 3 and tensor.size(1) == 1:
+            tensor = tensor.squeeze(1)
+    else:
+        raise TypeError(f"Unsupported input type for AASIST-L inference: {type(waveform_or_tensor)}")
 
     device = next(model.parameters()).device
-    tensor = log_mel_tensor.to(device)
+    tensor = tensor.to(device)
 
     model.eval()
-    with torch.no_grad():
+    with torch.inference_mode():
         logits = model(tensor)
+        if logits.dim() != 2 or logits.size(-1) != 2:
+            raise RuntimeError(f"Unexpected AASIST-L output shape: {tuple(logits.shape)}")
         probs = torch.softmax(logits, dim=-1)
-        # Class 1 is synthetic / spoof
-        synth_prob = float(probs[0, 1].item())
+        # Index 0 = spoof, Index 1 = bona fide
+        spoof_prob = float(probs[0, 0].item())
 
-    return float(np.clip(synth_prob, 0.0, 1.0))
+    return float(np.clip(spoof_prob, 0.0, 1.0))

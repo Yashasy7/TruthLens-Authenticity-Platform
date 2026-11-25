@@ -10,22 +10,19 @@ import base64
 import logging
 from pathlib import Path
 import time
-from typing import Optional, Union
+from typing import Optional
 from uuid import UUID, uuid4
 
 from config.settings import settings
 from schemas.audio_analysis import (
-    AudioAnalysisRequest,
     AudioAnalysisStatus,
     AudioEvidence,
+    AudioSpliceMarker,
     BackendAudioAnalysisResponse,
     LegacyAudioAnalysisResponse,
 )
 from services.audio_analysis.features import extract_acoustic_features
-from services.audio_analysis.ingestion import (
-    load_and_preprocess_audio,
-    temp_audio_file,
-)
+from services.audio_analysis.ingestion import load_and_preprocess_audio
 from services.audio_analysis.model import get_audio_classifier
 from services.audio_analysis.phase_spectral import analyze_phase_and_spectral_forensics
 from services.audio_analysis.pitch import extract_pitch_contour
@@ -33,6 +30,78 @@ from services.audio_analysis.splicing import detect_audio_splices
 from services.audio_analysis.temporal import evaluate_temporal_audio_windows
 
 logger = logging.getLogger(__name__)
+
+AUDIO_SCOPE_LIMITATION = (
+    "AASIST-L is trained on ASVspoof2019 Logical Access data and is not a universal "
+    "detector for all modern commercial voice-cloning or post-processed audio."
+)
+
+
+def classify_audio_authenticity(
+    checkpoint_loaded: bool,
+    synthetic_voice_prob: Optional[float],
+    splice_markers: list[AudioSpliceMarker],
+    phase_discontinuity: float,
+    duration_seconds: float,
+    voiced_fraction: float,
+) -> tuple[str, str]:
+    """
+    Derive an evidence-grounded assessment category and verbal summary while preserving
+    strict separation between the AASIST-L classifier output and physical heuristics.
+
+    Categories:
+      - Likely Authentic
+      - Potentially Synthetic Voice
+      - Potentially Spliced
+      - Inconclusive
+    """
+    if not checkpoint_loaded or synthetic_voice_prob is None:
+        return (
+            "Inconclusive",
+            "Inconclusive (Model Unavailable): pretrained AASIST-L checkpoint is not loaded; "
+            "handcrafted acoustic heuristics alone cannot determine synthetic voice authenticity.",
+        )
+
+    if duration_seconds < 0.5 or voiced_fraction <= 0.0:
+        return (
+            "Inconclusive",
+            "Inconclusive: insufficient voiced speech or audio duration to reliably evaluate voice authenticity.",
+        )
+
+    has_splices = len(splice_markers) > 0
+    if synthetic_voice_prob >= 0.50 and has_splices:
+        return (
+            "Potentially Synthetic Voice",
+            "Potentially Synthetic Voice: AASIST-L indicates elevated spoof likelihood alongside "
+            f"{len(splice_markers)} heuristic splice boundary indicator(s). {AUDIO_SCOPE_LIMITATION}",
+        )
+
+    if synthetic_voice_prob >= 0.50:
+        return (
+            "Potentially Synthetic Voice",
+            f"Potentially Synthetic Voice: AASIST-L spoof probability is elevated ({synthetic_voice_prob:.2%}). "
+            f"{AUDIO_SCOPE_LIMITATION}",
+        )
+
+    if has_splices:
+        return (
+            "Potentially Spliced",
+            f"Potentially Spliced: AASIST-L spoof probability is low ({synthetic_voice_prob:.2%}), "
+            f"but {len(splice_markers)} abrupt acoustic discontinuity marker(s) were detected.",
+        )
+
+    if synthetic_voice_prob >= 0.25 or phase_discontinuity >= 0.50:
+        return (
+            "Inconclusive",
+            "Inconclusive: borderline AASIST-L score or elevated STFT phase discontinuity does not support "
+            "a definitive authenticity classification.",
+        )
+
+    return (
+        "Likely Authentic",
+        f"Likely Authentic (within benchmark scope): AASIST-L spoof probability is low ({synthetic_voice_prob:.2%}) "
+        f"with no heuristic splice or severe phase anomalies detected. {AUDIO_SCOPE_LIMITATION}",
+    )
 
 
 def analyze_audio_bytes(
@@ -42,22 +111,6 @@ def analyze_audio_bytes(
     """
     Execute full Module 07 Audio Authenticity & Voice Forensics pipeline
     directly from uploaded binary audio bytes.
-
-    Stages:
-      1. Validation & deterministic audio decoding (mono, 16 kHz float32).
-      2. Acoustic feature extraction & Mel-spectrogram generation (Base64 PNG).
-      3. Fundamental frequency (F0) pitch contour & pitch variance analysis.
-      4. Phase continuity & vocoder spectral anomaly forensics.
-      5. Audio splice boundary discontinuity detection.
-      6. Temporal windowing & PyTorch AASIST anti-spoofing inference.
-      7. Assembly of structured AudioEvidence and Spring Boot compatible DTO.
-
-    Args:
-        audio_bytes: Raw binary audio bytes.
-        filename: Optional source filename (default: audio.wav).
-
-    Returns:
-        BackendAudioAnalysisResponse matching Spring Boot FastApiAudioAnalysisResponse.
     """
     start_time = time.monotonic()
     logger.info("Initiating audio authenticity analysis | filename=%s size=%d bytes", filename, len(audio_bytes))
@@ -65,10 +118,11 @@ def analyze_audio_bytes(
     if not audio_bytes:
         raise ValueError("Audio payload cannot be empty (0 bytes).")
 
-    # Stage 1: Ingestion & Preprocessing
+    # Stage 1: Ingestion & Format Validation (WAV, FLAC, OGG, MP3 -> 16 kHz mono float32)
     waveform, meta = load_and_preprocess_audio(
         audio_bytes,
         target_sr=settings.audio_sample_rate,
+        filename=filename,
     )
 
     # Stage 2: Acoustic Features & Mel-Spectrogram
@@ -80,9 +134,11 @@ def analyze_audio_bytes(
         n_mels=settings.audio_n_mels,
     )
 
-    # Optional: Persist Mel-spectrogram PNG artifact to storage
+    # Persist Mel-spectrogram PNG artifact safely
     spectrogram_filename = f"{uuid4()}.png"
-    spectrogram_path = settings.storage_dir / "spectrogram" / spectrogram_filename
+    spectrogram_dir = settings.storage_dir / "spectrogram"
+    spectrogram_dir.mkdir(parents=True, exist_ok=True)
+    spectrogram_path = spectrogram_dir / spectrogram_filename
     try:
         spectrogram_bytes = base64.b64decode(features.spectrogram_base64)
         spectrogram_path.write_bytes(spectrogram_bytes)
@@ -105,33 +161,59 @@ def analyze_audio_bytes(
         hop_length=settings.audio_hop_length,
     )
 
-    # Stage 5: Splice Boundary Detection
+    # Stage 5: Splice Boundary Detection (Heuristic acoustic discontinuity indicators)
     splice_markers = detect_audio_splices(
         features,
         phase_res,
         threshold=settings.audio_splice_threshold,
     )
 
-    # Stage 6: PyTorch AASIST Classifier Inference over Temporal Windows
+    # Stage 6: Official Pretrained AASIST-L Classifier Inference
     classifier_model, model_metadata = get_audio_classifier()
-    temporal_res = evaluate_temporal_audio_windows(
-        waveform,
-        sr=settings.audio_sample_rate,
-        window_duration=settings.audio_window_duration_seconds,
-        hop_duration=settings.audio_window_hop_seconds,
-        model=classifier_model,
+    checkpoint_loaded = bool(model_metadata.get("checkpoint_loaded", False)) and classifier_model is not None
+
+    if checkpoint_loaded:
+        temporal_res = evaluate_temporal_audio_windows(
+            waveform,
+            sr=settings.audio_sample_rate,
+            window_duration=settings.audio_window_duration_seconds,
+            hop_duration=settings.audio_window_hop_seconds,
+            model=classifier_model,
+        )
+        synthetic_voice_prob: Optional[float] = temporal_res.aggregate_synthetic_prob
+        temporal_details = temporal_res.details
+        response_status = AudioAnalysisStatus.COMPLETED.value
+    else:
+        synthetic_voice_prob = None
+        temporal_details = {
+            "window_count": 0,
+            "checkpoint_loaded": False,
+            "error": model_metadata.get("error") or "AASIST-L checkpoint unavailable",
+        }
+        response_status = AudioAnalysisStatus.MODEL_UNAVAILABLE.value
+
+    verdict_category, forensic_verdict = classify_audio_authenticity(
+        checkpoint_loaded=checkpoint_loaded,
+        synthetic_voice_prob=synthetic_voice_prob,
+        splice_markers=splice_markers,
+        phase_discontinuity=phase_res.phase_discontinuity_score,
+        duration_seconds=meta.duration_seconds,
+        voiced_fraction=pitch_res.voiced_fraction,
     )
 
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
     logger.info(
-        "Audio analysis completed in %dms | synthetic_prob=%.4f pitch_var=%.2f splices=%d",
+        "Audio analysis finished in %dms | status=%s checkpoint_loaded=%s synth_prob=%s pitch_var=%.2f splices=%d",
         elapsed_ms,
-        temporal_res.aggregate_synthetic_prob,
+        response_status,
+        checkpoint_loaded,
+        f"{synthetic_voice_prob:.4f}" if synthetic_voice_prob is not None else "None",
         pitch_res.pitch_variance,
         len(splice_markers),
     )
 
     evidence_details = {
+        "format": meta.format_name,
         "channels": meta.channels,
         "original_sample_rate": meta.original_sample_rate,
         "processed_sample_rate": meta.sample_rate,
@@ -140,7 +222,17 @@ def analyze_audio_bytes(
         "spectral_anomaly_score": round(phase_res.spectral_anomaly_score, 4),
         "high_freq_attenuation_ratio": round(phase_res.high_freq_attenuation_ratio, 4),
         "processing_time_ms": elapsed_ms,
-        "temporal": temporal_res.details,
+        "checkpoint_loaded": checkpoint_loaded,
+        "architecture": model_metadata.get("architecture", "AASIST-L"),
+        "class_mapping": model_metadata.get("class_mapping", {"0": "spoof", "1": "bonafide"}),
+        "verdict_category": verdict_category,
+        "forensic_verdict": forensic_verdict,
+        "limitations_note": AUDIO_SCOPE_LIMITATION,
+        "heuristics_disclaimer": (
+            "Pitch variance, STFT phase discontinuity, and splice markers are acoustic forensic "
+            "indicators supporting review and are kept independent from neural spoof probability."
+        ),
+        "temporal": temporal_details,
     }
 
     evidence = AudioEvidence(
@@ -157,7 +249,7 @@ def analyze_audio_bytes(
     )
 
     return BackendAudioAnalysisResponse(
-        synthetic_voice_prob=temporal_res.aggregate_synthetic_prob,
+        synthetic_voice_prob=synthetic_voice_prob,
         spectrogram_url=spectrogram_url,
         spectrogram_base64=features.spectrogram_base64,
         pitch_variance=round(pitch_res.pitch_variance, 4),
@@ -165,7 +257,7 @@ def analyze_audio_bytes(
         model_name=model_metadata.get("model_name", settings.audio_model_name),
         model_version=model_metadata.get("model_version", settings.audio_model_version),
         evidence=evidence,
-        status="COMPLETED",
+        status=response_status,
     )
 
 
@@ -185,6 +277,12 @@ def analyze_audio_from_path(
     backend_res = analyze_audio_bytes(audio_bytes, filename=p.name)
     elapsed_ms = int((time.monotonic() - start_time) * 1000)
 
+    legacy_status = (
+        AudioAnalysisStatus.MODEL_UNAVAILABLE
+        if backend_res.status == AudioAnalysisStatus.MODEL_UNAVAILABLE.value
+        else AudioAnalysisStatus.COMPLETED
+    )
+
     return LegacyAudioAnalysisResponse(
         media_id=media_id,
         synthetic_voice_prob=backend_res.synthetic_voice_prob,
@@ -194,5 +292,8 @@ def analyze_audio_from_path(
         phase_discontinuity=backend_res.evidence.phase_discontinuity_score,
         splice_markers=backend_res.splice_markers,
         processing_time_ms=elapsed_ms,
-        status=AudioAnalysisStatus.COMPLETED,
+        status=legacy_status,
+        error_message=backend_res.evidence.details.get("forensic_verdict")
+        if legacy_status == AudioAnalysisStatus.MODEL_UNAVAILABLE
+        else None,
     )

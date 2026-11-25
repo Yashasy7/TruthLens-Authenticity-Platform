@@ -1,6 +1,7 @@
 package com.truthlens.backend.controller;
 
 import com.truthlens.backend.config.SecurityConfig;
+import com.truthlens.backend.dto.MediaContentResource;
 import com.truthlens.backend.dto.MediaResponse;
 import com.truthlens.backend.dto.MediaUploadResponse;
 import com.truthlens.backend.entity.Role;
@@ -21,10 +22,13 @@ import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.boot.test.mock.mockito.MockBean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.io.ByteArrayInputStream;
 import java.lang.reflect.Field;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -37,6 +41,8 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -254,5 +260,68 @@ class MediaControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].originalFilename").value("doc.txt"))
                 .andExpect(jsonPath("$[0].mediaType").value("TEXT"));
+    }
+
+    @Test
+    @DisplayName("GET /api/media/{id}/content — returns 200 OK with streamed media and correct stored MIME type")
+    void getMediaContent_authenticated_returns200WithStream() throws Exception {
+        String token = createBearerToken("analyst@truthlens.org", RoleName.ANALYST);
+        UUID mediaId = UUID.randomUUID();
+        byte[] expectedBytes = "fake-quarantined-image-data".getBytes();
+
+        MediaContentResource resource = new MediaContentResource(
+                new ByteArrayInputStream(expectedBytes),
+                "image/png",
+                "sample_evidence.png",
+                expectedBytes.length
+        );
+
+        when(mediaService.getMediaContent(eq(mediaId), eq("analyst@truthlens.org"))).thenReturn(resource);
+
+        mockMvc.perform(get("/api/media/" + mediaId + "/content")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "image/png"))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, "inline; filename=\"sample_evidence.png\""))
+                .andExpect(content().bytes(expectedBytes));
+    }
+
+    @Test
+    @DisplayName("GET /api/media/{id}/content — returns 401 Unauthorized when unauthenticated")
+    void getMediaContent_unauthenticated_returns401() throws Exception {
+        UUID mediaId = UUID.randomUUID();
+
+        mockMvc.perform(get("/api/media/" + mediaId + "/content"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("GET /api/media/{id}/content — returns 404 when media content not found")
+    void getMediaContent_notFound_returns404() throws Exception {
+        String token = createBearerToken("user@truthlens.org", RoleName.USER);
+        UUID mediaId = UUID.randomUUID();
+
+        when(mediaService.getMediaContent(eq(mediaId), eq("user@truthlens.org")))
+                .thenThrow(new MediaNotFoundException("Media not found with id: " + mediaId));
+
+        mockMvc.perform(get("/api/media/" + mediaId + "/content")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.error").value("MEDIA_NOT_FOUND"));
+    }
+
+    @Test
+    @DisplayName("GET /api/media/{id}/content — returns 403 Forbidden on IDOR violation")
+    void getMediaContent_idorViolation_returns403() throws Exception {
+        String token = createBearerToken("user@truthlens.org", RoleName.USER);
+        UUID mediaId = UUID.randomUUID();
+
+        when(mediaService.getMediaContent(eq(mediaId), eq("user@truthlens.org")))
+                .thenThrow(new AccessDeniedException("Access denied. You do not have permission to access this media."));
+
+        mockMvc.perform(get("/api/media/" + mediaId + "/content")
+                        .header(HttpHeaders.AUTHORIZATION, token))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value("FORBIDDEN"));
     }
 }

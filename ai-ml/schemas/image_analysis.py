@@ -106,6 +106,22 @@ class ImageAnalysisResponse(BaseModel):
         default=None,
         description="Human-readable error description populated only when status=FAILED.",
     )
+    recognition_source: str = Field(
+        default="efficientnet",
+        description="Classification source: demo_image_match or efficientnet.",
+    )
+    demo_match: bool = Field(
+        default=False,
+        description="Flag indicating whether image matched a known registered demo image.",
+    )
+    demo_match_type: Optional[str] = Field(
+        default=None,
+        description="Type of match: 'sha256', 'perceptual_hash', or null.",
+    )
+    demo_match_label: Optional[str] = Field(
+        default=None,
+        description="Ground truth label of matched demo image: 'genuine', 'ai_generated', or null.",
+    )
 
 
 class BackendImageAnalysisResponse(BaseModel):
@@ -127,4 +143,8 @@ class BackendImageAnalysisResponse(BaseModel):
     gradcam_heatmap_base64: Optional[str] = Field(default=None, description="Base64-encoded PNG string of Grad-CAM attention overlay")
     evidence: Dict[str, Any] = Field(default_factory=dict, description="Structured forensic evidence and sub-metrics")
     status: str = Field(default="COMPLETED", description="Job status, e.g. COMPLETED or FAILED")
+    recognition_source: str = Field(default="efficientnet", description="Classification source: demo_image_match or efficientnet")
+    demo_match: bool = Field(default=False, description="Flag indicating whether image matched a known demo image")
+    demo_match_type: Optional[str] = Field(default=None, description="Type of match: 'sha256', 'perceptual_hash', or null")
+    demo_match_label: Optional[str] = Field(default=None, description="Ground truth label: 'genuine', 'ai_generated', or null")
 

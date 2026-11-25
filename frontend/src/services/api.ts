@@ -14,7 +14,7 @@ import type {
   TranscriptResponse,
   MetadataResponse,
   FingerprintResponse,
-  DuplicateMatchResponse,
+  DuplicateDetailResponse,
 } from '../types/forensics';
 import type { ClaimAnalysisResponse } from '../types/claim';
 
@@ -158,6 +158,9 @@ export const mediaApi = {
 
   getMyMedia: (): Promise<MediaResponse[]> =>
     request<MediaResponse[]>('/api/media/my'),
+
+  getContentUrl: (id: string): string =>
+    `/api/media/${id}/content`,
 };
 
 // -----------------------------------------------------------------------------
@@ -169,8 +172,8 @@ export const forensicsApi = {
   getFingerprint: (mediaId: string): Promise<FingerprintResponse> =>
     request<FingerprintResponse>(`/api/media/${mediaId}/fingerprint`),
 
-  getDuplicates: (mediaId: string): Promise<DuplicateMatchResponse[]> =>
-    request<DuplicateMatchResponse[]>(`/api/media/${mediaId}/duplicates`),
+  getDuplicates: (mediaId: string): Promise<DuplicateDetailResponse> =>
+    request<DuplicateDetailResponse>(`/api/media/${mediaId}/duplicates`),
 
   // Module 04: Metadata
   getMetadata: (mediaId: string): Promise<MetadataResponse> =>
@@ -205,6 +208,9 @@ export const forensicsApi = {
     request<AudioAnalysisResponse>(`/api/media/${mediaId}/audio-analysis`, {
       method: 'POST',
     }),
+
+  getAudioArtifactUrl: (mediaId: string, type: 'spectrogram' = 'spectrogram'): string =>
+    `/api/media/${mediaId}/audio-analysis/artifacts/${type}`,
 
   // Module 08: AV Synchronization
   getAvSyncAnalysis: (mediaId: string): Promise<AvSyncAnalysisResponse> =>

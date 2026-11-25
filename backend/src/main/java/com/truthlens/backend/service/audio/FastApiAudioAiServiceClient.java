@@ -100,8 +100,16 @@ public class FastApiAudioAiServiceClient implements AudioAiServiceClient {
         if (response == null) {
             throw new AiServiceException("AI audio service returned a null payload");
         }
-        if (response.getSyntheticVoiceProb() < 0.0 || response.getSyntheticVoiceProb() > 1.0) {
-            throw new AiServiceException("Invalid synthetic voice probability received: " + response.getSyntheticVoiceProb());
+        boolean modelUnavailable = "MODEL_UNAVAILABLE".equalsIgnoreCase(response.getStatus());
+        Double prob = response.getSyntheticVoiceProb();
+        if (prob == null) {
+            if (!modelUnavailable) {
+                throw new AiServiceException("AI audio service omitted synthetic_voice_prob for status: " + response.getStatus());
+            }
+            return;
+        }
+        if (prob < 0.0 || prob > 1.0) {
+            throw new AiServiceException("Invalid synthetic voice probability received: " + prob);
         }
     }
 }

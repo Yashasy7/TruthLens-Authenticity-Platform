@@ -12,7 +12,7 @@ import java.util.List;
 public class FastApiAudioAnalysisResponse {
 
     @JsonProperty("synthetic_voice_prob")
-    private double syntheticVoiceProb;
+    private Double syntheticVoiceProb;
 
     @JsonProperty("spectrogram_url")
     private String spectrogramUrl;
@@ -42,7 +42,7 @@ public class FastApiAudioAnalysisResponse {
     }
 
     public FastApiAudioAnalysisResponse(
-            double syntheticVoiceProb,
+            Double syntheticVoiceProb,
             String spectrogramUrl,
             String spectrogramBase64,
             double pitchVariance,
@@ -62,11 +62,11 @@ public class FastApiAudioAnalysisResponse {
         this.status = status;
     }
 
-    public double getSyntheticVoiceProb() {
+    public Double getSyntheticVoiceProb() {
         return syntheticVoiceProb;
     }
 
-    public void setSyntheticVoiceProb(double syntheticVoiceProb) {
+    public void setSyntheticVoiceProb(Double syntheticVoiceProb) {
         this.syntheticVoiceProb = syntheticVoiceProb;
     }
 

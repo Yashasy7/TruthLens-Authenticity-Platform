@@ -8,14 +8,9 @@ import {
   CheckCircle2,
   AlertCircle,
   ArrowRight,
-  FileCheck,
-  RotateCcw,
-  FileText,
-  Film,
   Music,
   Image as ImageIcon,
-  Shield,
-  Trash2,
+  FileCheck,
 } from "lucide-react";
 
 const MAX_FILE_SIZE = 100 * 1024 * 1024; // 100MB
@@ -32,17 +27,13 @@ export function Upload() {
   const [error, setError] = useState<string | null>(null);
   const [uploadResult, setUploadResult] = useState<MediaUploadResponse | null>(null);
 
-  // Clean up object URLs on change/unmount
   useEffect(() => {
     if (!rawFile) {
-      if (previewUrl) {
-        URL.revokeObjectURL(previewUrl);
-        setPreviewUrl(null);
-      }
+      setPreviewUrl(null);
       return;
     }
 
-    if (rawFile.type.startsWith("image/") || rawFile.type.startsWith("video/") || rawFile.type.startsWith("audio/")) {
+    if (rawFile.type.startsWith("image/")) {
       const url = URL.createObjectURL(rawFile);
       setPreviewUrl(url);
       return () => {
@@ -62,17 +53,26 @@ export function Upload() {
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      setError(`File size (${formatFileSize(file.size)}) exceeds the maximum allowed limit of 100 MB.`);
+      setError(`File size (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the maximum allowed limit of 100 MB.`);
       return;
     }
 
     const isImage = file.type.startsWith("image/");
-    const isVideo = file.type.startsWith("video/");
-    const isAudio = file.type.startsWith("audio/");
-    const isText = file.type === "text/plain" || file.name.endsWith(".txt") || file.name.endsWith(".json") || file.name.endsWith(".csv");
+    const lowerName = file.name.toLowerCase();
+    const isSupportedAudioExt =
+      lowerName.endsWith(".wav") ||
+      lowerName.endsWith(".flac") ||
+      lowerName.endsWith(".ogg") ||
+      lowerName.endsWith(".mp3");
+    const isAudio = file.type.startsWith("audio/") || isSupportedAudioExt;
 
-    if (!isImage && !isVideo && !isAudio && !isText) {
-      setError(`Unsupported file format: '${file.type || file.name}'. Supported categories: Images (PNG, JPG, WebP), Video (MP4, WebM, MOV), Audio (WAV, MP3, FLAC), and Text.`);
+    if (!isImage && !isAudio) {
+      setError(`Unsupported file format. Supported categories: Images (PNG, JPG, WebP) and Audio (WAV, FLAC, OGG, MP3).`);
+      return;
+    }
+
+    if (isAudio && !isSupportedAudioExt && !["audio/wav", "audio/x-wav", "audio/wave", "audio/flac", "audio/x-flac", "audio/ogg", "audio/mpeg", "audio/mp3"].includes(file.type.toLowerCase())) {
+      setError(`Unsupported audio format. Supported audio formats: WAV, FLAC, OGG, and MP3.`);
       return;
     }
 
@@ -111,273 +111,294 @@ export function Upload() {
     try {
       setIsUploading(true);
       setError(null);
-      setUploadProgress(30);
+      setUploadProgress(25);
 
       const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => (prev < 90 ? prev + 15 : prev));
+        setUploadProgress((prev) => (prev < 85 ? prev + 15 : prev));
       }, 150);
 
       const response = await mediaApi.upload(rawFile);
       clearInterval(progressInterval);
       setUploadProgress(100);
       setUploadResult(response);
-
-      // Transition smoothly to analysis workspace
-      setTimeout(() => {
-        navigate(`/analysis?id=${response.id}`);
-      }, 1000);
     } catch (err: any) {
-      setError(err?.message || "Failed to ingest media into quarantined storage. Please check connectivity or try a different file.");
-      setUploadProgress(0);
+      setError(err?.message || "Failed to upload file. Please check backend service connectivity.");
     } finally {
       setIsUploading(false);
     }
   };
 
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  };
+
   const isImage = rawFile?.type.startsWith("image/");
-  const isVideo = rawFile?.type.startsWith("video/");
   const isAudio = rawFile?.type.startsWith("audio/");
-  const isText = rawFile?.type.startsWith("text/") || rawFile?.name.endsWith(".txt");
 
   return (
-    <div className="upload-page">
-      <div className="page-heading">
-        <div>
-          <span className="eyebrow">MEDIA INGESTION &amp; SECURITY</span>
-          <h2>Start an Investigation</h2>
-          <p>
-            Upload evidence and send it through the TruthLens multi-modal analysis pipeline.
-          </p>
-        </div>
+    <div className="upload-page" style={{ maxWidth: "800px", margin: "0 auto", paddingBottom: "40px" }}>
+      {/* Header */}
+      <div style={{ textAlign: "center", marginBottom: "32px" }}>
+        <span style={{ fontSize: "11px", fontWeight: 700, letterSpacing: "1.2px", color: "var(--primary)", textTransform: "uppercase" }}>
+          Media Ingestion
+        </span>
+        <h2 style={{ fontSize: "28px", fontWeight: 700, margin: "6px 0 8px", color: "var(--text)", letterSpacing: "-0.5px" }}>
+          Upload & Inspect Evidence
+        </h2>
+        <p style={{ margin: 0, fontSize: "14px", color: "var(--text-secondary)", maxWidth: "520px", marginLeft: "auto", marginRight: "auto", lineHeight: 1.5 }}>
+          Upload image or audio evidence into secure quarantine storage for automated authenticity analysis.
+        </p>
       </div>
 
+      {/* Error Alert */}
       {error && (
         <div
           style={{
             display: "flex",
             alignItems: "center",
-            justifyContent: "space-between",
             gap: "10px",
-            background: "var(--danger-soft)",
-            color: "var(--danger)",
             padding: "14px 18px",
+            background: "var(--danger-soft)",
+            border: "1px solid #fecaca",
             borderRadius: "10px",
-            fontSize: "14px",
+            color: "var(--danger)",
+            fontSize: "13px",
             marginBottom: "20px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-            <AlertCircle size={18} style={{ flexShrink: 0 }} />
-            <span>{error}</span>
-          </div>
-          <button
-            onClick={handleUploadAndAnalyze}
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              padding: "6px 12px",
-              fontSize: "12px",
-              fontWeight: 600,
-              background: "var(--surface)",
-              color: "var(--danger)",
-              border: "1px solid var(--danger)",
-              borderRadius: "6px",
-              cursor: "pointer",
-            }}
-          >
-            <RotateCcw size={13} />
-            <span>Retry</span>
-          </button>
+          <AlertCircle size={18} style={{ flexShrink: 0 }} />
+          <span>{error}</span>
         </div>
       )}
 
+      {/* Success Alert */}
       {uploadResult && (
         <div
           style={{
             display: "flex",
-            flexDirection: "column",
-            gap: "10px",
+            alignItems: "center",
+            justifyContent: "space-between",
+            flexWrap: "wrap",
+            gap: "14px",
+            padding: "16px 20px",
             background: "var(--success-soft)",
-            color: "var(--success)",
-            padding: "18px 22px",
+            border: "1px solid #bbf7d0",
             borderRadius: "12px",
+            color: "var(--success)",
             fontSize: "14px",
-            marginBottom: "20px",
-            border: "1px solid rgba(33, 163, 102, 0.2)",
+            marginBottom: "24px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: "10px", fontWeight: 750, fontSize: "15px" }}>
-              <CheckCircle2 size={20} />
-              <span>{uploadResult.message || "File uploaded and quarantined successfully!"}</span>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <CheckCircle2 size={20} style={{ flexShrink: 0 }} />
+            <div>
+              <strong style={{ display: "block" }}>Upload Complete</strong>
+              <small style={{ color: "var(--text-secondary)", fontSize: "12px" }}>
+                File successfully ingested and quarantined.
+              </small>
             </div>
-            <button
-              onClick={() => navigate(`/analysis?id=${uploadResult.id}`)}
-              className="primary-button"
-              style={{ fontSize: "12px", padding: "6px 14px", display: "inline-flex", alignItems: "center", gap: "6px" }}
-            >
-              <span>Go to Workspace</span>
-              <ArrowRight size={14} />
-            </button>
           </div>
 
-          <div style={{ fontSize: "12px", opacity: 0.95, fontFamily: "monospace", display: "flex", flexWrap: "wrap", gap: "16px" }}>
-            <span><strong>UUID:</strong> {uploadResult.id}</span>
-            <span><strong>MIME:</strong> {uploadResult.mimeType}</span>
-            <span><strong>SHA-256:</strong> {uploadResult.sha256Hash?.substring(0, 24)}...</span>
-          </div>
+          <button
+            onClick={() => navigate(`/analysis?id=${uploadResult.id}`)}
+            style={{
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "9px 16px",
+              borderRadius: "8px",
+              background: "var(--success)",
+              color: "#ffffff",
+              border: "none",
+              fontSize: "13px",
+              fontWeight: 650,
+              cursor: "pointer",
+            }}
+          >
+            <span>View Analysis Results</span>
+            <ArrowRight size={14} />
+          </button>
         </div>
       )}
 
-      {/* Drag & Drop Zone */}
-      <section
-        className={`upload-zone ${isDragging ? "dragging" : ""}`}
-        onDragOver={(event) => {
-          event.preventDefault();
+      {/* Drag & Drop Upload Zone */}
+      <div
+        onDragOver={(e) => {
+          e.preventDefault();
           setIsDragging(true);
         }}
         onDragLeave={() => setIsDragging(false)}
         onDrop={handleDrop}
         onClick={() => inputRef.current?.click()}
-        style={{ cursor: isUploading ? "not-allowed" : "pointer" }}
+        style={{
+          border: isDragging ? "2px dashed var(--primary)" : "2px dashed var(--border)",
+          borderRadius: "16px",
+          background: isDragging ? "var(--primary-soft)" : "var(--surface)",
+          padding: "48px 24px",
+          textAlign: "center",
+          cursor: isUploading ? "not-allowed" : "pointer",
+          transition: "all 0.15s ease",
+          boxShadow: "0 1px 3px rgba(0, 0, 0, 0.03)",
+        }}
       >
         <input
           ref={inputRef}
           type="file"
           hidden
-          accept="image/*,video/*,audio/*,text/plain"
+          accept="image/*,.wav,.flac,.ogg,.mp3,audio/wav,audio/x-wav,audio/flac,audio/ogg,audio/mpeg"
           onChange={handleInputChange}
           disabled={isUploading}
         />
 
-        <div className="upload-icon" style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <div
+          style={{
+            width: "56px",
+            height: "56px",
+            borderRadius: "14px",
+            background: "var(--primary-soft)",
+            color: "var(--primary)",
+            display: "grid",
+            placeItems: "center",
+            margin: "0 auto 16px",
+          }}
+        >
           <UploadCloud size={28} />
         </div>
 
-        <h3 style={{ margin: "10px 0 4px", fontSize: "17px", fontWeight: 700 }}>
-          {isDragging ? "Drop your file to ingest" : "Drop your evidence here"}
+        <h3 style={{ margin: "0 0 6px", fontSize: "17px", fontWeight: 700, color: "var(--text)" }}>
+          {isDragging ? "Drop your file to ingest" : "Drag and drop your file here"}
         </h3>
-        <p style={{ margin: "0 0 12px", fontSize: "13px", color: "var(--text-secondary)" }}>
-          or click to browse from your computer
+        <p style={{ margin: "0 0 18px", fontSize: "13px", color: "var(--text-secondary)" }}>
+          or <span style={{ color: "var(--primary)", fontWeight: 600 }}>browse files</span> from your computer
         </p>
 
-        <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", justifyContent: "center", marginTop: "8px" }}>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 8px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+        {/* Supported formats */}
+        <div style={{ display: "flex", gap: "8px", justifyContent: "center", flexWrap: "wrap" }}>
+          <span style={{ fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
             PNG, JPG, WebP
           </span>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 8px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
-            MP4, MOV, WebM
-          </span>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 8px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
+          <span style={{ fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
             WAV, MP3, FLAC
           </span>
-          <span style={{ fontSize: "11px", fontWeight: 700, padding: "4px 8px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-secondary)", border: "1px solid var(--border)" }}>
-            Max 100MB
+          <span style={{ fontSize: "11px", fontWeight: 600, padding: "4px 10px", borderRadius: "6px", background: "var(--surface-soft)", color: "var(--text-muted)", border: "1px solid var(--border)" }}>
+            Up to 100 MB
           </span>
         </div>
-      </section>
+      </div>
 
-      {/* Selected File Card with Media Preview */}
+      {/* Selected File Card */}
       {rawFile && (
-        <section
+        <div
           style={{
             marginTop: "20px",
             background: "var(--surface)",
             border: "1px solid var(--border)",
             borderRadius: "14px",
             padding: "20px",
-            display: "flex",
-            flexDirection: "column",
-            gap: "14px",
+            boxShadow: "0 1px 3px rgba(0, 0, 0, 0.04)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: "14px", alignItems: "center" }}>
-              {/* Thumbnail / Indicator */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: "16px", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
               <div
                 style={{
-                  width: "60px",
-                  height: "60px",
+                  width: "52px",
+                  height: "52px",
                   borderRadius: "10px",
                   background: "var(--surface-soft)",
                   border: "1px solid var(--border)",
                   overflow: "hidden",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
+                  display: "grid",
+                  placeItems: "center",
                   flexShrink: 0,
                 }}
               >
                 {isImage && previewUrl ? (
-                  <img src={previewUrl} alt="Thumbnail preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : isVideo ? (
-                  <Film size={26} color="var(--primary)" />
+                  <img src={previewUrl} alt="Preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : isAudio ? (
-                  <Music size={26} color="var(--warning)" />
-                ) : isText ? (
-                  <FileText size={26} color="var(--success)" />
+                  <Music size={24} style={{ color: "#f59e0b" }} />
                 ) : (
-                  <ImageIcon size={26} color="var(--text-muted)" />
+                  <ImageIcon size={24} style={{ color: "var(--primary)" }} />
                 )}
               </div>
 
               <div>
-                <span className="card-label">READY FOR INGESTION</span>
-                <h3 style={{ margin: "4px 0 6px", fontSize: "16px", fontWeight: 700 }}>{rawFile.name}</h3>
-
-                <div style={{ display: "flex", gap: "10px", fontSize: "12px", color: "var(--text-secondary)" }}>
-                  <span>{rawFile.type || "binary"}</span>
-                  <span>•</span>
-                  <span>{formatFileSize(rawFile.size)}</span>
-                  <span>•</span>
-                  <span style={{ fontWeight: 600, color: uploadResult ? "var(--success)" : isUploading ? "var(--primary)" : "var(--text)" }}>
-                    {uploadResult ? "QUARANTINED" : isUploading ? "UPLOADING..." : "STAGED"}
-                  </span>
-                </div>
+                <p style={{ margin: "0 0 2px", fontSize: "15px", fontWeight: 650, color: "var(--text)" }}>
+                  {rawFile.name}
+                </p>
+                <small style={{ fontSize: "12px", color: "var(--text-secondary)" }}>
+                  {formatFileSize(rawFile.size)} &bull; {rawFile.type || "binary"}
+                </small>
               </div>
             </div>
 
-            <button
-              onClick={removeFile}
-              disabled={isUploading}
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-                padding: "8px 12px",
-                borderRadius: "6px",
-                border: "1px solid var(--border)",
-                background: "var(--surface-soft)",
-                color: "var(--danger)",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: isUploading ? "not-allowed" : "pointer",
-              }}
-            >
-              <Trash2 size={13} />
-              <span>Remove</span>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                onClick={removeFile}
+                disabled={isUploading}
+                style={{
+                  padding: "8px 12px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  background: "var(--surface-soft)",
+                  color: "var(--text-secondary)",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                  cursor: isUploading ? "not-allowed" : "pointer",
+                }}
+              >
+                Remove
+              </button>
+
+              <button
+                onClick={handleUploadAndAnalyze}
+                disabled={isUploading || !!uploadResult}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  padding: "8px 18px",
+                  borderRadius: "8px",
+                  border: "none",
+                  background: isUploading ? "var(--text-muted)" : "var(--primary)",
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: 650,
+                  cursor: isUploading ? "not-allowed" : "pointer",
+                  transition: "background 0.15s ease",
+                }}
+              >
+                {isUploading ? (
+                  <>
+                    <div
+                      style={{
+                        width: "14px",
+                        height: "14px",
+                        border: "2px solid #ffffff",
+                        borderTopColor: "transparent",
+                        borderRadius: "50%",
+                        animation: "spin 0.8s linear infinite",
+                      }}
+                    />
+                    <span>Uploading...</span>
+                  </>
+                ) : (
+                  <>
+                    <FileCheck size={16} />
+                    <span>Upload & Analyze</span>
+                  </>
+                )}
+              </button>
+            </div>
           </div>
-
-          {/* Media Interactive Preview if Audio/Video */}
-          {isVideo && previewUrl && (
-            <div style={{ marginTop: "6px", borderRadius: "8px", overflow: "hidden", background: "#000", maxWidth: "420px" }}>
-              <video src={previewUrl} controls style={{ width: "100%", maxHeight: "200px", display: "block" }} />
-            </div>
-          )}
-
-          {isAudio && previewUrl && (
-            <div style={{ marginTop: "6px", maxWidth: "420px" }}>
-              <audio src={previewUrl} controls style={{ width: "100%" }} />
-            </div>
-          )}
 
           {/* Upload Progress Bar */}
           {isUploading && (
-            <div style={{ marginTop: "8px" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px", color: "var(--text-secondary)" }}>
-                <span>Transferring to backend quarantine...</span>
+            <div style={{ marginTop: "16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "var(--text-secondary)", marginBottom: "6px" }}>
+                <span>Quarantining and sending to FastAPI Vision Microservice...</span>
                 <span>{uploadProgress}%</span>
               </div>
               <div style={{ width: "100%", height: "6px", background: "var(--surface-soft)", borderRadius: "3px", overflow: "hidden" }}>
@@ -393,74 +414,10 @@ export function Upload() {
               </div>
             </div>
           )}
-        </section>
-      )}
-
-      {/* Informational Cards */}
-      <section className="upload-info-grid">
-        <div className="upload-info-card">
-          <span className="info-number">01</span>
-          <div>
-            <h3>Secure Quarantine</h3>
-            <p>Files are validated via Apache Tika magic-bytes, hashed with SHA-256, and stored in isolated quarantine.</p>
-          </div>
-        </div>
-
-        <div className="upload-info-card">
-          <span className="info-number">02</span>
-          <div>
-            <h3>Multi-Modal Forensics</h3>
-            <p>Dispatched through PyTorch deepfake networks, ELA, Grad-CAM, AASIST voice forensics, OCR, and Faster-Whisper.</p>
-          </div>
-        </div>
-
-        <div className="upload-info-card">
-          <span className="info-number">03</span>
-          <div>
-            <h3>Explainable Evidence</h3>
-            <p>Review spatial heatmaps, suspicious timestamps, speech transcripts, and verified claims with provenance hashes.</p>
-          </div>
-        </div>
-      </section>
-
-      {/* Action Button */}
-      {rawFile && (
-        <div className="upload-action" style={{ marginTop: "24px" }}>
-          <button
-            className="primary-button"
-            onClick={handleUploadAndAnalyze}
-            disabled={isUploading || !!uploadResult}
-            style={{ display: "inline-flex", alignItems: "center", gap: "8px", fontSize: "14px", padding: "12px 24px" }}
-          >
-            {isUploading ? (
-              <>
-                <span className="status-pulse" />
-                <span>Ingesting into Quarantine ({uploadProgress}%)...</span>
-              </>
-            ) : uploadResult ? (
-              <>
-                <FileCheck size={18} />
-                <span>Ingested Successfully!</span>
-              </>
-            ) : (
-              <>
-                <Shield size={18} />
-                <span>Start Multi-Modal Investigation</span>
-                <ArrowRight size={18} />
-              </>
-            )}
-          </button>
         </div>
       )}
     </div>
   );
-}
-
-function formatFileSize(size: number) {
-  if (size < 1024 * 1024) {
-    return `${Math.round(size / 1024)} KB`;
-  }
-  return `${(size / (1024 * 1024)).toFixed(1)} MB`;
 }
 
 export default Upload;

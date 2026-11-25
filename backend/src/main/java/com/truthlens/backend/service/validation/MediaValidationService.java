@@ -65,7 +65,7 @@ public class MediaValidationService {
                 "video/mpeg"
         ).forEach(mime -> map.put(mime, MediaType.VIDEO));
 
-        // Audio types
+        // Audio types (aligned with Module 07 Python soundfile/libsndfile decoder: WAV, FLAC, OGG, MP3)
         Set.of(
                 "audio/mpeg",
                 "audio/mp3",
@@ -74,12 +74,9 @@ public class MediaValidationService {
                 "audio/wave",
                 "audio/vnd.wave",
                 "audio/ogg",
+                "audio/vorbis",
                 "audio/flac",
-                "audio/x-flac",
-                "audio/x-m4a",
-                "audio/mp4",
-                "audio/aac",
-                "audio/x-aiff"
+                "audio/x-flac"
         ).forEach(mime -> map.put(mime, MediaType.AUDIO));
 
         // Text / Document types

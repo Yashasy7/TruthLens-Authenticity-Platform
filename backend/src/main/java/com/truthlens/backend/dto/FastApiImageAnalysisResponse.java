@@ -1,11 +1,13 @@
 package com.truthlens.backend.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import java.util.Map;
 
 /**
  * Internal DTO mapping the FastAPI service response payload.
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public record FastApiImageAnalysisResponse(
         @JsonProperty("ai_prob") double aiProb,
         @JsonProperty("manipulation_prob") double manipulationProb,
